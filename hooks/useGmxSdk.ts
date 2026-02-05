@@ -10,6 +10,13 @@ import type { MarketKey } from '@/lib/gmx';
 
 const ARBITRUM_CHAIN_ID = 42161;
 
+// Default slippage tolerance in basis points (3% = 300 bps)
+// Higher slippage needed because:
+// 1. Time between order submission and keeper execution
+// 2. Price oracle updates
+// 3. Market volatility
+const DEFAULT_SLIPPAGE_BPS = 300;
+
 // ERC20 ABI for approvals
 const ERC20_ABI = [
   {
@@ -115,7 +122,7 @@ export function useGmxSdk() {
         collateralUsd: params.collateralUsd,
         collateralAmount: collateralAmount.toString(),
         leverage: params.leverage,
-        slippageBps: params.slippageBps ?? 100,
+        slippageBps: params.slippageBps ?? DEFAULT_SLIPPAGE_BPS,
         currentChainId: chainId,
       });
 
@@ -138,7 +145,7 @@ export function useGmxSdk() {
           marketAddress,
           payTokenAddress: USDC_ADDRESS,
           collateralTokenAddress: USDC_ADDRESS,
-          allowedSlippageBps: params.slippageBps ?? 100, // 1% default slippage
+          allowedSlippageBps: params.slippageBps ?? DEFAULT_SLIPPAGE_BPS, // 3% default slippage
           leverage: params.leverage ? BigInt(params.leverage) : undefined,
           skipSimulation: true, // Skip simulation - can cause false failures
         });
@@ -174,7 +181,7 @@ export function useGmxSdk() {
         collateralUsd: params.collateralUsd,
         collateralAmount: collateralAmount.toString(),
         leverage: params.leverage,
-        slippageBps: params.slippageBps ?? 100,
+        slippageBps: params.slippageBps ?? DEFAULT_SLIPPAGE_BPS,
         currentChainId: chainId,
       });
 
@@ -197,7 +204,7 @@ export function useGmxSdk() {
           marketAddress,
           payTokenAddress: USDC_ADDRESS,
           collateralTokenAddress: USDC_ADDRESS,
-          allowedSlippageBps: params.slippageBps ?? 100, // 1% default slippage
+          allowedSlippageBps: params.slippageBps ?? DEFAULT_SLIPPAGE_BPS, // 3% default slippage
           leverage: params.leverage ? BigInt(params.leverage) : undefined,
           skipSimulation: true, // Skip simulation - can cause false failures
         });
