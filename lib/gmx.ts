@@ -728,7 +728,7 @@ export function buildApproveCalldata(amount: bigint): `0x${string}` {
   });
 }
 
-// Calculate acceptable price with slippage
+// Calculate acceptable price with slippage for OPENING positions
 export function calculateAcceptablePrice(
   price: number,
   isLong: boolean,
@@ -742,4 +742,116 @@ export function calculateAcceptablePrice(
     // For shorts, we want to receive at least this price
     return price * (1 - slippageMultiplier);
   }
+}
+
+// ============ GMX V2 Close Position ============
+
+// Close position parameters
+export interface ClosePositionParams {
+  market: MarketKey;
+  isLong: boolean;
+  sizeDeltaUsd: number; // Position size to close in USD (use full size for complete close)
+  collateralDeltaUsd: number; // Collateral to withdraw in USD (use full collateral for complete close)
+  acceptablePrice: number; // With slippage applied (opposite direction from open!)
+  account: `0x${string}`;
+}
+
+// Calculate acceptable price with slippage for CLOSING positions
+// Note: This is the OPPOSITE of opening - closing a long means selling, closing a short means buying back
+export function calculateAcceptablePriceForClose(
+  price: number,
+  isLong: boolean,
+  slippagePercent: number = 0.5
+): number {
+  const slippageMultiplier = slippagePercent / 100;
+  if (isLong) {
+    // Closing a long = selling, accept lower price
+    return price * (1 - slippageMultiplier);
+  } else {
+    // Closing a short = buying back, accept higher price
+    return price * (1 + slippageMultiplier);
+  }
+}
+
+// Build the multicall data for closing a position (MarketDecrease order)
+export function buildClosePositionCalldata(params: ClosePositionParams): {
+  calldata: `0x${string}`;
+  value: bigint;
+} {
+  const marketInfo = GMX_MARKETS[params.market];
+  const tokenDecimals = INDEX_TOKEN_DECIMALS[params.market];
+
+  // Convert amounts to proper units
+  const sizeDeltaUsdBigInt = parseUnits(params.sizeDeltaUsd.toString(), 30); // GMX uses 30 decimals for USD
+  const collateralDeltaAmountBigInt = parseUnits(params.collateralDeltaUsd.toString(), 6); // USDC has 6 decimals
+
+  // Convert acceptable price to contract format
+  const acceptablePriceBigInt = convertToContractPrice(params.acceptablePrice, tokenDecimals);
+
+  console.log('[buildClosePositionCalldata] params:', {
+    market: params.market,
+    tokenDecimals,
+    acceptablePrice: params.acceptablePrice,
+    acceptablePriceBigInt: acceptablePriceBigInt.toString(),
+    sizeDeltaUsd: params.sizeDeltaUsd,
+    sizeDeltaUsdBigInt: sizeDeltaUsdBigInt.toString(),
+    collateralDeltaUsd: params.collateralDeltaUsd,
+    collateralDeltaAmountBigInt: collateralDeltaAmountBigInt.toString(),
+  });
+
+  // Order parameters for closing (MarketDecrease)
+  const orderParams = {
+    addresses: {
+      receiver: params.account,
+      cancellationReceiver: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+      callbackContract: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+      uiFeeReceiver: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+      market: marketInfo.marketToken,
+      initialCollateralToken: TOKENS.USDC,
+      swapPath: [] as `0x${string}`[],
+    },
+    numbers: {
+      sizeDeltaUsd: sizeDeltaUsdBigInt,
+      initialCollateralDeltaAmount: collateralDeltaAmountBigInt, // Collateral to withdraw
+      triggerPrice: 0n,
+      acceptablePrice: acceptablePriceBigInt,
+      executionFee: EXECUTION_FEE,
+      callbackGasLimit: 0n,
+      minOutputAmount: 0n, // Min USDC to receive (0 = any amount)
+      validFromTime: 0n,
+    },
+    orderType: ORDER_TYPE.MarketDecrease, // Close position
+    decreasePositionSwapType: DECREASE_POSITION_SWAP_TYPE.NoSwap, // Receive USDC directly
+    isLong: params.isLong,
+    shouldUnwrapNativeToken: false, // We want USDC, not ETH
+    autoCancel: false,
+    referralCode: FIXR_REFERRAL_CODE,
+    dataList: [] as `0x${string}`[],
+  };
+
+  // Build multicall: sendWnt (execution fee) + createOrder
+  // Note: No sendTokens needed for closing - we're withdrawing, not depositing
+  const sendWntData = encodeFunctionData({
+    abi: EXCHANGE_ROUTER_ABI,
+    functionName: 'sendWnt',
+    args: [GMX_CONTRACTS.OrderVault, EXECUTION_FEE],
+  });
+
+  const createOrderData = encodeFunctionData({
+    abi: EXCHANGE_ROUTER_ABI,
+    functionName: 'createOrder',
+    args: [orderParams],
+  });
+
+  // Multicall with both calls (no sendTokens for close)
+  const multicallData = encodeFunctionData({
+    abi: EXCHANGE_ROUTER_ABI,
+    functionName: 'multicall',
+    args: [[sendWntData, createOrderData]],
+  });
+
+  return {
+    calldata: multicallData,
+    value: EXECUTION_FEE,
+  };
 }
