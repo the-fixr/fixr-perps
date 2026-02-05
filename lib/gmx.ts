@@ -567,11 +567,11 @@ export const EXCHANGE_ROUTER_ABI = [
   },
 ] as const;
 
-// GMX execution fee (in ETH) - approximately 0.0003 ETH on Arbitrum
-export const EXECUTION_FEE = parseUnits('0.0003', 18);
+// GMX execution fee (in ETH) - increased for reliability
+export const EXECUTION_FEE = parseUnits('0.001', 18);
 
-// Fixr referral code (32 bytes)
-export const FIXR_REFERRAL_CODE = '0x6669787200000000000000000000000000000000000000000000000000000000' as `0x${string}`;
+// Empty referral code (zero bytes32) - can use registered code later
+export const FIXR_REFERRAL_CODE = '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`;
 
 // Order creation parameters
 export interface CreateOrderParams {
