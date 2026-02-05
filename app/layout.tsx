@@ -32,7 +32,7 @@ const frameMetadata = {
   // TODO: Replace with deployed URL
   imageUrl: 'https://perps.fixr.nexus/images/frame-preview.png',
   button: {
-    title: 'Open Terminal',
+    title: 'Trade Perps on Arb',
     action: {
       type: 'launch_frame',
       name: 'Fixr Perps',
