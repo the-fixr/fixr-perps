@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useAccount, useConnect, useSendTransaction } from 'wagmi';
 import type { FrameContext } from '../types/frame';
 import {
   GMX_MARKETS,
@@ -254,6 +255,11 @@ export default function Demo() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Wagmi hooks - auto-connect in mini app
+  const { address, isConnected } = useAccount();
+  const { connect, connectors } = useConnect();
+  const { sendTransaction, isPending: isTxPending } = useSendTransaction();
+
   // Trading state
   const [markets, setMarkets] = useState<MarketData[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<MarketKey>('ETH-USD');
@@ -262,8 +268,6 @@ export default function Demo() {
   const [leverage, setLeverage] = useState(10);
   const [positions, setPositions] = useState<Position[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
-  const [walletAddress, setWalletAddress] = useState<`0x${string}` | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Get current market data
   const currentMarket = markets.find((m) => m.market === selectedMarket);
@@ -305,62 +309,65 @@ export default function Demo() {
     }
   }, []);
 
+  // Auto-connect on mount if connector available
+  useEffect(() => {
+    if (!isConnected && connectors.length > 0) {
+      connect({ connector: connectors[0] });
+    }
+  }, [isConnected, connect, connectors]);
+
+  // Fetch positions when wallet connects
+  useEffect(() => {
+    if (address) {
+      fetchPositions(address);
+    }
+  }, [address, fetchPositions]);
+
   // Handle trade submission
-  const handleTrade = useCallback(async () => {
-    if (!window.frame?.sdk) {
-      setError('Frame SDK not available');
+  const handleTrade = useCallback(() => {
+    if (!isConnected || !address) {
+      // Try to connect
+      if (connectors.length > 0) {
+        connect({ connector: connectors[0] });
+      }
       return;
     }
 
-    setIsSubmitting(true);
+    if (!preview) {
+      setError('Unable to calculate trade preview');
+      return;
+    }
+
     setError(null);
 
-    try {
-      // Request wallet connection via Frame SDK
-      const provider = window.frame.sdk.wallet.ethProvider;
-      const accounts = await provider.request({ method: 'eth_requestAccounts' }) as string[];
+    // Build trade info for confirmation
+    const tradeInfo = {
+      market: GMX_MARKETS[selectedMarket].name,
+      symbol: GMX_MARKETS[selectedMarket].symbol,
+      direction: isLong ? 'LONG' : 'SHORT',
+      size: formatUsd(preview.size),
+      leverage: `${leverage}x`,
+      entryPrice: formatPrice(selectedMarket, preview.entryPrice),
+      liqPrice: formatPrice(selectedMarket, preview.liquidationPrice),
+    };
 
-      if (!accounts || accounts.length === 0) {
-        throw new Error('No wallet connected');
-      }
+    // For now, show confirmation - GMX contract calls would go here
+    // GMX V2 uses the ExchangeRouter contract for creating positions
+    const confirmed = confirm(
+      `Open ${tradeInfo.direction} ${tradeInfo.symbol}?\n\n` +
+      `Size: ${tradeInfo.size}\n` +
+      `Leverage: ${tradeInfo.leverage}\n` +
+      `Entry: $${tradeInfo.entryPrice}\n` +
+      `Liq Price: $${tradeInfo.liqPrice}\n\n` +
+      `Wallet: ${address.slice(0, 6)}...${address.slice(-4)}\n\n` +
+      `GMX contract integration coming soon!`
+    );
 
-      const userAddress = accounts[0] as `0x${string}`;
-      setWalletAddress(userAddress);
-
-      // For now, show confirmation of what would be traded
-      const tradeInfo = preview ? {
-        market: GMX_MARKETS[selectedMarket].name,
-        direction: isLong ? 'LONG' : 'SHORT',
-        size: formatUsd(preview.size),
-        leverage: `${leverage}x`,
-        entryPrice: formatPrice(selectedMarket, preview.entryPrice),
-      } : null;
-
-      if (tradeInfo) {
-        // In production, this would build and send a GMX transaction
-        // For now, show the trade details
-        const confirmed = confirm(
-          `Open ${tradeInfo.direction} Position?\n\n` +
-          `Market: ${tradeInfo.market}\n` +
-          `Size: ${tradeInfo.size}\n` +
-          `Leverage: ${tradeInfo.leverage}\n` +
-          `Entry: $${tradeInfo.entryPrice}\n\n` +
-          `Wallet: ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}\n\n` +
-          `(GMX contract integration coming soon)`
-        );
-
-        if (confirmed) {
-          // Refresh positions after trade
-          fetchPositions(userAddress);
-        }
-      }
-    } catch (err) {
-      console.error('Trade error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to execute trade');
-    } finally {
-      setIsSubmitting(false);
+    if (confirmed && address) {
+      // Refresh positions
+      fetchPositions(address);
     }
-  }, [preview, selectedMarket, isLong, leverage, fetchPositions]);
+  }, [isConnected, address, preview, selectedMarket, isLong, leverage, connect, connectors, fetchPositions]);
 
   // Initialize Frame SDK
   useEffect(() => {
@@ -396,13 +403,7 @@ export default function Demo() {
         if (mounted) {
           setFrameData(context);
           setError(null);
-
-          // Get wallet address from context if available
-          const address = context?.user?.custodyAddress || context?.user?.verifiedAddresses?.ethAddresses?.[0];
-          if (address) {
-            setWalletAddress(address as `0x${string}`);
-            fetchPositions(address as `0x${string}`);
-          }
+          // Wallet connection handled by wagmi auto-connect
         }
       } catch (err) {
         console.error('Frame initialization error:', err);
@@ -424,19 +425,11 @@ export default function Demo() {
     // Refresh prices every 5 seconds
     const interval = setInterval(fetchMarkets, 5000);
 
-    // Refresh positions every 30 seconds if wallet connected
-    const positionsInterval = setInterval(() => {
-      if (walletAddress) {
-        fetchPositions(walletAddress);
-      }
-    }, 30000);
-
     return () => {
       mounted = false;
       clearInterval(interval);
-      clearInterval(positionsInterval);
     };
-  }, [fetchMarkets, fetchPositions, walletAddress]);
+  }, [fetchMarkets]);
 
   // Fixr PFP - local file
   const FIXR_PFP = '/fixrpfp.png';
@@ -482,13 +475,17 @@ export default function Demo() {
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            <StatusDot connected={!!frameData?.user} />
-            {frameData?.user ? (
+            <StatusDot connected={isConnected} />
+            {isConnected && address ? (
+              <span className="text-terminal-secondary font-mono text-[10px]">
+                {address.slice(0, 4)}...{address.slice(-3)}
+              </span>
+            ) : frameData?.user ? (
               <span className="text-terminal-secondary font-mono text-[10px]">
                 @{frameData.user.username}
               </span>
             ) : (
-              <span className="text-terminal-secondary text-[10px]">Connect</span>
+              <span className="text-terminal-secondary text-[10px]">...</span>
             )}
           </div>
         </div>
@@ -634,11 +631,11 @@ export default function Demo() {
                 isLong
                   ? 'bg-long/20 text-long border border-long/50 hover:bg-long/30'
                   : 'bg-short/20 text-short border border-short/50 hover:bg-short/30'
-              } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+              } ${isTxPending ? 'opacity-50 cursor-not-allowed' : ''}`}
               onClick={handleTrade}
-              disabled={isSubmitting || !parseFloat(collateral)}
+              disabled={isTxPending || !parseFloat(collateral)}
             >
-              {isSubmitting ? 'Connecting...' : walletAddress ? (isLong ? 'Open Long' : 'Open Short') : 'Connect & Trade'}
+              {isTxPending ? 'Processing...' : isConnected ? (isLong ? 'Open Long' : 'Open Short') : 'Connect Wallet'}
             </button>
           </div>
         </div>

@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Script from 'next/script';
 import { JetBrains_Mono, Space_Grotesk, Inter } from 'next/font/google';
 import '../app/globals.css';
+import { Providers } from './components/Providers';
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
@@ -68,7 +69,7 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans bg-terminal-bg text-terminal-text antialiased">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
