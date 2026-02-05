@@ -268,6 +268,19 @@ export default function Demo() {
   // Get current market data
   const currentMarket = markets.find((m) => m.market === selectedMarket);
 
+  // Calculate trade preview
+  const preview = currentMarket
+    ? calculateTradePreview(
+        {
+          market: selectedMarket,
+          isLong,
+          collateral: parseFloat(collateral) || 0,
+          leverage,
+        },
+        currentMarket.price
+      )
+    : null;
+
   // Fetch market data
   const fetchMarkets = useCallback(async () => {
     try {
@@ -424,19 +437,6 @@ export default function Demo() {
       clearInterval(positionsInterval);
     };
   }, [fetchMarkets, fetchPositions, walletAddress]);
-
-  // Calculate trade preview
-  const preview = currentMarket
-    ? calculateTradePreview(
-        {
-          market: selectedMarket,
-          isLong,
-          collateral: parseFloat(collateral) || 0,
-          leverage,
-        },
-        currentMarket.price
-      )
-    : null;
 
   // Fixr PFP - local file
   const FIXR_PFP = '/fixrpfp.png';
