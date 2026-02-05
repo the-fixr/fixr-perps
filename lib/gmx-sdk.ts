@@ -1,12 +1,19 @@
 import { GmxSdk } from '@gmx-io/sdk';
 import type { WalletClient } from 'viem';
 
+// Fixr fee receiver address (receives UI fees from GMX)
+export const FIXR_FEE_RECEIVER = '0xBe2Cc1861341F3b058A3307385BEBa84167b3fa4' as const;
+
 // GMX SDK configuration for Arbitrum
 export const GMX_SDK_CONFIG = {
   chainId: 42161 as const,
   oracleUrl: 'https://arbitrum-api.gmxinfra.io',
   rpcUrl: 'https://arb1.arbitrum.io/rpc',
   subsquidUrl: 'https://gmx.squids.live/gmx-synthetics-arbitrum:prod/api/graphql',
+  settings: {
+    // UI fee receiver - Fixr receives GMX's UI fee share on all trades
+    uiFeeReceiverAccount: FIXR_FEE_RECEIVER,
+  },
 };
 
 // GMX Market addresses on Arbitrum

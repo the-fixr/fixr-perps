@@ -578,6 +578,9 @@ export const EXECUTION_FEE = parseUnits('0.0003', 18);
 // Empty referral code (zero bytes32) - can use registered code later
 export const FIXR_REFERRAL_CODE = '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`;
 
+// Fixr fee receiver address (receives UI fees from GMX)
+export const FIXR_FEE_RECEIVER = '0xBe2Cc1861341F3b058A3307385BEBa84167b3fa4' as `0x${string}`;
+
 // Order creation parameters
 export interface CreateOrderParams {
   market: MarketKey;
@@ -640,7 +643,7 @@ export function buildCreateOrderCalldata(params: CreateOrderParams): {
       receiver: params.account,
       cancellationReceiver: '0x0000000000000000000000000000000000000000' as `0x${string}`, // Must be zero address per SDK
       callbackContract: '0x0000000000000000000000000000000000000000' as `0x${string}`,
-      uiFeeReceiver: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+      uiFeeReceiver: FIXR_FEE_RECEIVER, // Fixr receives UI fee share on all trades
       market: marketInfo.marketToken,
       initialCollateralToken: TOKENS.USDC,
       swapPath: [] as `0x${string}`[],
@@ -805,7 +808,7 @@ export function buildClosePositionCalldata(params: ClosePositionParams): {
       receiver: params.account,
       cancellationReceiver: '0x0000000000000000000000000000000000000000' as `0x${string}`,
       callbackContract: '0x0000000000000000000000000000000000000000' as `0x${string}`,
-      uiFeeReceiver: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+      uiFeeReceiver: FIXR_FEE_RECEIVER, // Fixr receives UI fee share on all trades
       market: marketInfo.marketToken,
       initialCollateralToken: TOKENS.USDC,
       swapPath: [] as `0x${string}`[],
