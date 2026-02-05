@@ -13,7 +13,7 @@ export const GMX_CONTRACTS = {
 // Chainlink Price Feed addresses on Arbitrum (use getAddress for proper checksumming)
 const CHAINLINK_FEEDS: Record<string, `0x${string}`> = {
   'ETH-USD': getAddress('0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612'),
-  'BTC-USD': getAddress('0x6ce185860a4963106506c203335a2910c7e99934'), // BTC/USD on Arbitrum
+  'BTC-USD': getAddress('0x6ce185860a4963106506C203335A2910413708e9'), // BTC/USD on Arbitrum
   'ARB-USD': getAddress('0xb2A824043730FE05F3DA2efaFa1CBbe83fa548D6'),
   'LINK-USD': getAddress('0x86E53CF1B870786351Da77A57575e79CB55812CB'),
 };
