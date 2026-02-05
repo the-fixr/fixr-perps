@@ -2,8 +2,9 @@
 
 import { useMemo, useCallback } from 'react';
 import { useWalletClient, useAccount, useSwitchChain, useChainId, usePublicClient } from 'wagmi';
-import { parseUnits, encodeFunctionData } from 'viem';
+import { parseUnits } from 'viem';
 import { GmxSdk } from '@gmx-io/sdk';
+import { getDecreasePositionAmounts } from '@gmx-io/sdk/utils/trade';
 import { GMX_SDK_CONFIG, GMX_MARKET_ADDRESSES, USDC_ADDRESS } from '@/lib/gmx-sdk';
 import { GMX_CONTRACTS } from '@/lib/gmx';
 import type { MarketKey } from '@/lib/gmx';
@@ -240,10 +241,152 @@ export function useGmxSdk() {
     [sdk, chainId, switchChainAsync, ensureApproval]
   );
 
+  // Close a position (full close)
+  const closePosition = useCallback(
+    async (params: {
+      market: MarketKey;
+      isLong: boolean;
+      slippageBps?: number;
+    }) => {
+      if (!sdk) throw new Error('SDK not initialized - wallet not connected');
+
+      const marketAddress = GMX_MARKET_ADDRESSES[params.market];
+
+      console.log('[useGmxSdk] Closing position via SDK:', {
+        market: params.market,
+        marketAddress,
+        isLong: params.isLong,
+        slippageBps: params.slippageBps ?? DEFAULT_SLIPPAGE_BPS,
+        currentChainId: chainId,
+      });
+
+      try {
+        // CRITICAL: Ensure we're on Arbitrum before sending the transaction
+        if (chainId !== ARBITRUM_CHAIN_ID) {
+          console.log('[useGmxSdk] Switching to Arbitrum...');
+          await switchChainAsync({ chainId: ARBITRUM_CHAIN_ID });
+          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log('[useGmxSdk] Chain switched to Arbitrum');
+        }
+
+        // Step 1: Get markets info (returns { marketsInfoData, tokensData, pricesUpdatedAt })
+        console.log('[useGmxSdk] Fetching markets info...');
+        const marketsResult = await sdk.markets.getMarketsInfo();
+        const marketsInfoData = marketsResult.marketsInfoData;
+        const tokensData = marketsResult.tokensData;
+
+        if (!marketsInfoData || !tokensData) {
+          throw new Error('Failed to fetch markets or tokens data');
+        }
+
+        const marketInfo = Object.values(marketsInfoData).find(
+          m => m.marketTokenAddress.toLowerCase() === marketAddress.toLowerCase()
+        );
+        if (!marketInfo) {
+          throw new Error(`Market not found: ${params.market}`);
+        }
+
+        // Step 2: Get positions info
+        console.log('[useGmxSdk] Fetching positions info...');
+        const positionsInfoData = await sdk.positions.getPositionsInfo({
+          marketsInfoData,
+          tokensData,
+          showPnlInLeverage: false,
+        });
+
+        // Find the position to close
+        const positionKey = Object.keys(positionsInfoData).find(key => {
+          const pos = positionsInfoData[key];
+          return (
+            pos.marketAddress.toLowerCase() === marketAddress.toLowerCase() &&
+            pos.isLong === params.isLong
+          );
+        });
+
+        if (!positionKey) {
+          throw new Error(`Position not found for ${params.market} ${params.isLong ? 'LONG' : 'SHORT'}`);
+        }
+
+        const position = positionsInfoData[positionKey];
+        console.log('[useGmxSdk] Found position:', {
+          sizeInUsd: position.sizeInUsd.toString(),
+          collateralAmount: position.collateralAmount.toString(),
+          isLong: position.isLong,
+        });
+
+        // Step 3: Get position constants
+        const { minCollateralUsd, minPositionSizeUsd } = await sdk.positions.getPositionsConstants();
+        if (!minCollateralUsd || !minPositionSizeUsd) {
+          throw new Error('Failed to fetch position constants');
+        }
+
+        // Step 4: Get UI fee factor
+        const uiFeeFactor = await sdk.utils.getUiFeeFactor();
+
+        // Step 5: Get collateral token
+        const collateralToken = tokensData[position.collateralTokenAddress];
+        if (!collateralToken) {
+          throw new Error('Collateral token not found');
+        }
+
+        // Step 6: Ensure position has marketInfo loaded (required for getDecreasePositionAmounts)
+        if (!position.marketInfo) {
+          throw new Error('Position marketInfo not loaded');
+        }
+
+        // Step 7: Calculate decrease amounts for full close
+        console.log('[useGmxSdk] Calculating decrease amounts...');
+        const decreaseAmounts = getDecreasePositionAmounts({
+          marketInfo,
+          collateralToken,
+          isLong: params.isLong,
+          position: position as Parameters<typeof getDecreasePositionAmounts>[0]['position'],
+          closeSizeUsd: position.sizeInUsd, // Full close
+          keepLeverage: false,
+          userReferralInfo: undefined,
+          minCollateralUsd,
+          minPositionSizeUsd,
+          uiFeeFactor,
+          isSetAcceptablePriceImpactEnabled: false,
+        });
+
+        console.log('[useGmxSdk] Decrease amounts calculated:', {
+          sizeDeltaUsd: decreaseAmounts.sizeDeltaUsd.toString(),
+          collateralDeltaAmount: decreaseAmounts.collateralDeltaAmount?.toString(),
+          acceptablePrice: decreaseAmounts.acceptablePrice.toString(),
+        });
+
+        // Step 8: Create decrease order
+        console.log('[useGmxSdk] Creating decrease order...');
+        await sdk.orders.createDecreaseOrder({
+          marketsInfoData,
+          tokensData,
+          marketInfo,
+          decreaseAmounts,
+          collateralToken,
+          allowedSlippage: params.slippageBps ?? DEFAULT_SLIPPAGE_BPS,
+          isLong: params.isLong,
+          isTrigger: false, // Market order, not trigger
+        });
+
+        console.log('[useGmxSdk] Close position order submitted successfully');
+      } catch (err: unknown) {
+        console.error('[useGmxSdk] Close position FAILED:', err);
+        if (err instanceof Error) {
+          console.error('[useGmxSdk] Error message:', err.message);
+          console.error('[useGmxSdk] Error stack:', err.stack);
+        }
+        throw err;
+      }
+    },
+    [sdk, chainId, switchChainAsync]
+  );
+
   return {
     sdk,
     isReady: !!sdk,
     openLong,
     openShort,
+    closePosition,
   };
 }

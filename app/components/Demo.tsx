@@ -6,7 +6,6 @@ import { parseUnits } from 'viem';
 import type { FrameContext } from '../types/frame';
 import {
   GMX_MARKETS,
-  GMX_CONTRACTS,
   type MarketKey,
   type MarketData,
   type Position,
@@ -16,8 +15,6 @@ import {
   formatPrice,
   checkAllowance,
   getUsdcBalance,
-  buildClosePositionCalldata,
-  calculateAcceptablePriceForClose,
 } from '../../lib/gmx';
 import { formatUsd, formatPercent } from '../../lib/arbitrum';
 import { useGmxSdk } from '../../hooks/useGmxSdk';
@@ -468,7 +465,7 @@ export default function Demo() {
   const { isSuccess: isTxSuccess } = useWaitForTransactionReceipt({ hash: txHash });
 
   // GMX SDK hook - handles order creation with proper encoding
-  const { isReady: sdkReady, openLong: sdkOpenLong, openShort: sdkOpenShort } = useGmxSdk();
+  const { isReady: sdkReady, openLong: sdkOpenLong, openShort: sdkOpenShort, closePosition: sdkClosePosition } = useGmxSdk();
 
   // Log transaction errors
   useEffect(() => {
@@ -734,35 +731,23 @@ export default function Demo() {
     resetTx();
   }, [resetTx]);
 
-  // Handle close position
+  // Handle close position via GMX SDK
   const handleClosePosition = useCallback(async (position: Position) => {
     if (!address) {
       setError('Wallet not connected');
       return;
     }
 
-    // Ensure on Arbitrum
-    if (chainId !== 42161) {
-      setError('Please switch to Arbitrum network');
-      try {
-        switchChain({ chainId: 42161 });
-      } catch (e) {
-        console.error('[handleClosePosition] Failed to switch chain:', e);
-      }
+    if (!sdkReady) {
+      setError('SDK not ready - please reconnect wallet');
       return;
     }
 
-    // Parse position values (remove commas)
-    const sizeNum = parseFloat(position.size.replace(/,/g, ''));
-    const collateralNum = parseFloat(position.collateral.replace(/,/g, ''));
-    const markPriceNum = parseFloat(position.markPrice.replace(/,/g, ''));
-
-    console.log('[handleClosePosition] Closing position:', {
+    console.log('[handleClosePosition] Closing position via SDK:', {
       market: position.market,
       isLong: position.isLong,
-      size: sizeNum,
-      collateral: collateralNum,
-      markPrice: markPriceNum,
+      size: position.size,
+      collateral: position.collateral,
     });
 
     // Set closing state
@@ -771,38 +756,16 @@ export default function Demo() {
     setError(null);
 
     try {
-      // Calculate acceptable price with 1% slippage for close
-      const acceptablePrice = calculateAcceptablePriceForClose(
-        markPriceNum,
-        position.isLong,
-        1.0 // 1% slippage
-      );
-
-      // Build the close position calldata
-      const { calldata, value } = buildClosePositionCalldata({
+      // Use SDK to close position - handles all the complexity internally
+      await sdkClosePosition({
         market: position.market,
         isLong: position.isLong,
-        sizeDeltaUsd: sizeNum,
-        collateralDeltaUsd: collateralNum,
-        acceptablePrice,
-        account: address,
+        slippageBps: 300, // 3% slippage for close orders
       });
 
-      console.log('[handleClosePosition] Sending close tx:', {
-        to: GMX_CONTRACTS.ExchangeRouter,
-        data: calldata.slice(0, 66) + '...',
-        value: value.toString(),
-      });
+      console.log('[handleClosePosition] Close order submitted successfully');
 
-      // Send the transaction
-      sendTransaction({
-        to: GMX_CONTRACTS.ExchangeRouter,
-        data: calldata,
-        value,
-      });
-
-      // Note: Transaction confirmation handled by useWaitForTransactionReceipt
-      // We'll refresh positions after a delay to allow keeper execution
+      // Refresh positions after a delay to allow keeper execution
       setTimeout(() => {
         if (address) fetchPositions(address);
         setClosingPosition(null);
@@ -813,7 +776,7 @@ export default function Demo() {
       setError(err instanceof Error ? err.message : 'Failed to close position');
       setClosingPosition(null);
     }
-  }, [address, chainId, switchChain, sendTransaction, fetchPositions]);
+  }, [address, sdkReady, sdkClosePosition, fetchPositions]);
 
   // Initialize Frame SDK
   useEffect(() => {
