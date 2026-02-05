@@ -17,6 +17,10 @@ const ARBITRUM_CHAIN_ID = 42161;
 // 3. Market volatility
 const DEFAULT_SLIPPAGE_BPS = 300;
 
+// GMX leverage is in basis points: 1x = 10000, 10x = 100000
+// The SDK formula: sizeDeltaUsd = collateralUsd * leverage / 10000
+const BASIS_POINTS_DIVISOR = 10000n;
+
 // ERC20 ABI for approvals
 const ERC20_ABI = [
   {
@@ -139,6 +143,14 @@ export function useGmxSdk() {
         // Ensure exact approval before trade
         await ensureApproval(collateralAmount);
 
+        // Convert leverage to basis points (10x = 100000)
+        // SDK formula: sizeDeltaUsd = collateralUsd * leverage / 10000
+        const leverageBps = params.leverage
+          ? BigInt(params.leverage) * BASIS_POINTS_DIVISOR
+          : undefined;
+
+        console.log('[useGmxSdk] Leverage in basis points:', leverageBps?.toString());
+
         // SDK handles price fetching, calldata encoding, tx sending
         await sdk.orders.long({
           payAmount: collateralAmount,
@@ -146,7 +158,7 @@ export function useGmxSdk() {
           payTokenAddress: USDC_ADDRESS,
           collateralTokenAddress: USDC_ADDRESS,
           allowedSlippageBps: params.slippageBps ?? DEFAULT_SLIPPAGE_BPS, // 3% default slippage
-          leverage: params.leverage ? BigInt(params.leverage) : undefined,
+          leverage: leverageBps,
           skipSimulation: true, // Skip simulation - can cause false failures
         });
         console.log('[useGmxSdk] Long order submitted successfully');
@@ -198,6 +210,13 @@ export function useGmxSdk() {
         // Ensure exact approval before trade
         await ensureApproval(collateralAmount);
 
+        // Convert leverage to basis points (10x = 100000)
+        const leverageBps = params.leverage
+          ? BigInt(params.leverage) * BASIS_POINTS_DIVISOR
+          : undefined;
+
+        console.log('[useGmxSdk] Leverage in basis points:', leverageBps?.toString());
+
         // SDK handles price fetching, calldata encoding, tx sending
         await sdk.orders.short({
           payAmount: collateralAmount,
@@ -205,7 +224,7 @@ export function useGmxSdk() {
           payTokenAddress: USDC_ADDRESS,
           collateralTokenAddress: USDC_ADDRESS,
           allowedSlippageBps: params.slippageBps ?? DEFAULT_SLIPPAGE_BPS, // 3% default slippage
-          leverage: params.leverage ? BigInt(params.leverage) : undefined,
+          leverage: leverageBps,
           skipSimulation: true, // Skip simulation - can cause false failures
         });
         console.log('[useGmxSdk] Short order submitted successfully');
