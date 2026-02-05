@@ -587,27 +587,57 @@ export interface CreateOrderParams {
   account: `0x${string}`;
 }
 
+// Token decimals for price conversion (GMX contract price format)
+const INDEX_TOKEN_DECIMALS: Record<MarketKey, number> = {
+  'ETH-USD': 18,
+  'BTC-USD': 8,
+  'ARB-USD': 18,
+  'LINK-USD': 18,
+};
+
+// Convert price to GMX contract format
+// GMX stores acceptablePrice in 10^(30-tokenDecimals) precision
+function convertToContractPrice(price: number, tokenDecimals: number): bigint {
+  // price is in USD (e.g., 3000 for $3000)
+  // Contract expects: price * 10^(30 - tokenDecimals)
+  const precision = 30 - tokenDecimals;
+  // Use fixed-point to avoid floating point issues
+  const priceStr = price.toFixed(2);
+  return parseUnits(priceStr, precision);
+}
+
 // Build the multicall data for creating an order
 export function buildCreateOrderCalldata(params: CreateOrderParams): {
   calldata: `0x${string}`;
   value: bigint;
 } {
   const marketInfo = GMX_MARKETS[params.market];
+  const tokenDecimals = INDEX_TOKEN_DECIMALS[params.market];
 
   // Convert amounts to proper units
   const collateralAmountBigInt = parseUnits(params.collateralAmount.toString(), 6); // USDC has 6 decimals
   const sizeDeltaUsdBigInt = parseUnits(params.sizeDeltaUsd.toString(), 30); // GMX uses 30 decimals for USD
 
-  // Acceptable price with 30 decimals
-  // For longs: we want to buy at most at this price (higher = more slippage tolerance)
-  // For shorts: we want to sell at least at this price (lower = more slippage tolerance)
-  const acceptablePriceBigInt = parseUnits(params.acceptablePrice.toString(), 30);
+  // Convert acceptable price to contract format
+  // GMX contract expects price in 10^(30-tokenDecimals) precision
+  const acceptablePriceBigInt = convertToContractPrice(params.acceptablePrice, tokenDecimals);
 
-  // Order parameters (updated for current GMX V2)
+  console.log('[buildCreateOrderCalldata] params:', {
+    market: params.market,
+    tokenDecimals,
+    acceptablePrice: params.acceptablePrice,
+    acceptablePriceBigInt: acceptablePriceBigInt.toString(),
+    sizeDeltaUsd: params.sizeDeltaUsd,
+    sizeDeltaUsdBigInt: sizeDeltaUsdBigInt.toString(),
+    collateralAmount: params.collateralAmount,
+    collateralAmountBigInt: collateralAmountBigInt.toString(),
+  });
+
+  // Order parameters (aligned with GMX SDK)
   const orderParams = {
     addresses: {
       receiver: params.account,
-      cancellationReceiver: params.account, // Same as receiver
+      cancellationReceiver: '0x0000000000000000000000000000000000000000' as `0x${string}`, // Must be zero address per SDK
       callbackContract: '0x0000000000000000000000000000000000000000' as `0x${string}`,
       uiFeeReceiver: '0x0000000000000000000000000000000000000000' as `0x${string}`,
       market: marketInfo.marketToken,
@@ -616,7 +646,7 @@ export function buildCreateOrderCalldata(params: CreateOrderParams): {
     },
     numbers: {
       sizeDeltaUsd: sizeDeltaUsdBigInt,
-      initialCollateralDeltaAmount: collateralAmountBigInt,
+      initialCollateralDeltaAmount: 0n, // Must be 0 per SDK - collateral sent via sendTokens
       triggerPrice: 0n,
       acceptablePrice: acceptablePriceBigInt,
       executionFee: EXECUTION_FEE,
