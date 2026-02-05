@@ -37,24 +37,24 @@ function StatusDot({ connected }: { connected: boolean }) {
   );
 }
 
-// Price ticker item
+// Price ticker item (compact)
 function TickerItem({ data }: { data: MarketData }) {
   const isPositive = data.change24h >= 0;
   return (
-    <div className="flex items-center gap-3 px-4 py-2 border-r border-terminal-border last:border-0">
+    <div className="flex items-center gap-1.5 px-2 shrink-0">
       <img
         src={TOKEN_LOGOS[data.market]}
         alt={GMX_MARKETS[data.market].symbol}
-        className="w-5 h-5 rounded-full"
+        className="w-4 h-4 rounded-full"
       />
-      <span className="text-terminal-text font-medium">
+      <span className="text-terminal-text text-xs font-medium">
         {GMX_MARKETS[data.market].symbol}
       </span>
-      <span className="font-mono text-terminal-text">
+      <span className="font-mono text-xs text-terminal-text">
         ${formatPrice(data.market, data.price)}
       </span>
       <span
-        className={`font-mono text-sm ${
+        className={`font-mono text-[10px] ${
           isPositive ? 'text-long' : 'text-short'
         }`}
       >
@@ -64,7 +64,23 @@ function TickerItem({ data }: { data: MarketData }) {
   );
 }
 
-// Market selector button
+// Scrolling ticker wrapper
+function ScrollingTicker({ markets }: { markets: MarketData[] }) {
+  // Duplicate markets for seamless loop
+  const tickerItems = [...markets, ...markets];
+
+  return (
+    <div className="overflow-hidden border-t border-terminal-border bg-terminal-bg/50">
+      <div className="ticker-scroll flex py-1.5">
+        {tickerItems.map((m, i) => (
+          <TickerItem key={`${m.market}-${i}`} data={m} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Market selector button (compact)
 function MarketButton({
   market,
   selected,
@@ -84,25 +100,24 @@ function MarketButton({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center justify-between p-3 rounded-lg transition-all ${
+      className={`flex items-center justify-between p-2 rounded transition-all ${
         selected
           ? 'bg-terminal-tertiary border border-fixr-purple'
           : 'bg-terminal-secondary border border-terminal-border hover:border-fixr-purple/50'
       }`}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <img
           src={TOKEN_LOGOS[market]}
           alt={info.symbol}
-          className="w-6 h-6 rounded-full"
+          className="w-5 h-5 rounded-full"
         />
-        <span className="font-display text-lg font-bold">{info.symbol}</span>
-        <span className="text-terminal-secondary text-sm">/USD</span>
+        <span className="font-display text-sm font-bold">{info.symbol}</span>
       </div>
       <div className="text-right">
-        <div className="font-mono text-sm">${formatPrice(market, price)}</div>
+        <div className="font-mono text-[11px]">${formatPrice(market, price)}</div>
         <div
-          className={`font-mono text-xs ${
+          className={`font-mono text-[10px] ${
             isPositive ? 'text-long' : 'text-short'
           }`}
         >
@@ -113,7 +128,7 @@ function MarketButton({
   );
 }
 
-// Leverage slider
+// Leverage slider (compact)
 function LeverageSlider({
   value,
   onChange,
@@ -126,10 +141,10 @@ function LeverageSlider({
   const presets = [2, 5, 10, 25, max];
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div className="flex justify-between items-center">
-        <span className="text-terminal-secondary text-sm">Leverage</span>
-        <span className="font-mono text-fixr-purple">{value}x</span>
+        <span className="text-terminal-secondary text-xs">Leverage</span>
+        <span className="font-mono text-xs text-fixr-purple">{value}x</span>
       </div>
       <input
         type="range"
@@ -139,12 +154,12 @@ function LeverageSlider({
         onChange={(e) => onChange(parseInt(e.target.value))}
         className="w-full h-1 bg-terminal-border rounded-lg appearance-none cursor-pointer accent-accent-blue"
       />
-      <div className="flex justify-between gap-2">
+      <div className="flex justify-between gap-1">
         {presets.map((p) => (
           <button
             key={p}
             onClick={() => onChange(p)}
-            className={`flex-1 py-1 text-xs rounded transition-all font-mono ${
+            className={`flex-1 py-0.5 text-[10px] rounded transition-all font-mono ${
               value === p
                 ? 'bg-fixr-purple/20 text-fixr-purple border border-fixr-purple/50'
                 : 'bg-terminal-tertiary text-terminal-secondary border border-terminal-border hover:text-terminal-text'
@@ -158,51 +173,51 @@ function LeverageSlider({
   );
 }
 
-// Position card
+// Position card (compact)
 function PositionCard({ position }: { position: Position }) {
   const isProfit = parseFloat(position.pnl.replace(/[^0-9.-]/g, '')) >= 0;
 
   return (
     <div
-      className={`terminal-panel p-4 border-l-2 ${
+      className={`terminal-panel p-2 border-l-2 ${
         position.isLong ? 'border-l-long' : 'border-l-short'
       }`}
     >
-      <div className="flex justify-between items-start mb-3">
+      <div className="flex justify-between items-start mb-2">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <img
               src={TOKEN_LOGOS[position.market]}
               alt={GMX_MARKETS[position.market].symbol}
-              className="w-5 h-5 rounded-full"
+              className="w-4 h-4 rounded-full"
             />
-            <span className="font-bold">
+            <span className="font-bold text-sm">
               {GMX_MARKETS[position.market].symbol}
             </span>
             <span
-              className={`text-xs px-2 py-0.5 rounded ${
+              className={`text-[10px] px-1.5 py-0.5 rounded ${
                 position.isLong
                   ? 'bg-long/20 text-long'
                   : 'bg-short/20 text-short'
               }`}
             >
-              {position.isLong ? 'LONG' : 'SHORT'} {position.leverage}x
+              {position.isLong ? 'L' : 'S'} {position.leverage}x
             </span>
           </div>
-          <div className="text-terminal-secondary text-sm mt-1">
+          <div className="text-terminal-secondary text-[10px] mt-0.5">
             Size: ${position.size}
           </div>
         </div>
         <div className="text-right">
           <div
-            className={`font-mono font-bold ${
+            className={`font-mono text-sm font-bold ${
               isProfit ? 'text-long' : 'text-short'
             }`}
           >
             {position.pnl}
           </div>
           <div
-            className={`font-mono text-sm ${
+            className={`font-mono text-[10px] ${
               isProfit ? 'text-long' : 'text-short'
             }`}
           >
@@ -211,23 +226,21 @@ function PositionCard({ position }: { position: Position }) {
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 text-sm">
-        <div className="data-row">
-          <span className="text-terminal-secondary">Entry</span>
+      <div className="grid grid-cols-4 gap-1 text-[10px]">
+        <div>
+          <span className="text-terminal-secondary block">Entry</span>
           <span className="font-mono">${position.entryPrice}</span>
         </div>
-        <div className="data-row">
-          <span className="text-terminal-secondary">Mark</span>
+        <div>
+          <span className="text-terminal-secondary block">Mark</span>
           <span className="font-mono">${position.markPrice}</span>
         </div>
-        <div className="data-row">
-          <span className="text-terminal-secondary">Liq. Price</span>
-          <span className="font-mono text-accent-orange">
-            ${position.liquidationPrice}
-          </span>
+        <div>
+          <span className="text-terminal-secondary block">Liq</span>
+          <span className="font-mono text-accent-orange">${position.liquidationPrice}</span>
         </div>
-        <div className="data-row">
-          <span className="text-terminal-secondary">Collateral</span>
+        <div>
+          <span className="text-terminal-secondary block">Coll</span>
           <span className="font-mono">${position.collateral}</span>
         </div>
       </div>
@@ -373,74 +386,63 @@ export default function Demo() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-terminal-bg flex items-center justify-center">
-        <div className="text-center space-y-4">
+      <div className="h-screen bg-terminal-bg flex items-center justify-center">
+        <div className="text-center space-y-3">
           <img
             src={FIXR_PFP}
             alt="Fixr"
-            className="w-16 h-16 rounded-full mx-auto border-2 border-fixr-purple animate-pulse"
+            className="w-12 h-12 rounded-full mx-auto border-2 border-fixr-purple animate-pulse"
           />
-          <div className="font-display text-xl font-bold">
+          <div className="font-display text-lg font-bold">
             <span className="text-fixr-purple">FIXR</span>
             <span className="text-terminal-text"> PERPS</span>
           </div>
-          <div className="text-terminal-secondary text-sm">Initializing terminal...</div>
+          <div className="text-terminal-secondary text-xs">Initializing...</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-terminal-bg fixr-pattern-bg">
+    <div className="h-screen bg-terminal-bg fixr-pattern-bg flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="border-b border-terminal-border bg-terminal-secondary">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
+      <header className="border-b border-terminal-border bg-terminal-secondary shrink-0">
+        <div className="flex items-center justify-between px-2 py-1.5">
+          <div className="flex items-center gap-2">
             <img
               src={FIXR_PFP}
               alt="Fixr"
-              className="w-8 h-8 rounded-full border border-fixr-purple/50"
+              className="w-6 h-6 rounded-full border border-fixr-purple/50"
             />
-            <h1 className="font-display text-xl font-bold tracking-tight">
+            <h1 className="font-display text-sm font-bold tracking-tight">
               <span className="text-fixr-purple">FIXR</span>
               <span className="text-terminal-muted">{'//'}</span>
               <span className="text-terminal-text">PERPS</span>
             </h1>
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="text-[10px] text-arbitrum-blue border border-arbitrum-blue/30 rounded px-1.5 py-0.5 font-mono">
-                ARB
-              </span>
-              <span className="text-[10px] text-gmx-blue border border-gmx-blue/30 rounded px-1.5 py-0.5 font-mono">
-                GMX V2
-              </span>
-            </div>
+            <span className="text-[8px] text-arbitrum-blue border border-arbitrum-blue/30 rounded px-1 py-0.5 font-mono">
+              ARB
+            </span>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-sm">
-              <StatusDot connected={!!frameData?.user} />
-              {frameData?.user ? (
-                <span className="text-terminal-secondary font-mono text-xs">
-                  @{frameData.user.username}
-                </span>
-              ) : (
-                <span className="text-terminal-secondary text-xs">Connect</span>
-              )}
-            </div>
+          <div className="flex items-center gap-1.5">
+            <StatusDot connected={!!frameData?.user} />
+            {frameData?.user ? (
+              <span className="text-terminal-secondary font-mono text-[10px]">
+                @{frameData.user.username}
+              </span>
+            ) : (
+              <span className="text-terminal-secondary text-[10px]">Connect</span>
+            )}
           </div>
         </div>
 
-        {/* Price Ticker */}
-        <div className="flex overflow-x-auto border-t border-terminal-border bg-terminal-bg/50">
-          {markets.map((m) => (
-            <TickerItem key={m.market} data={m} />
-          ))}
-        </div>
+        {/* Scrolling Price Ticker */}
+        {markets.length > 0 && <ScrollingTicker markets={markets} />}
       </header>
 
-      {/* Main Content */}
-      <main className="p-4 space-y-4 max-w-4xl mx-auto">
+      {/* Main Content - Scrollable */}
+      <main className="flex-1 overflow-y-auto p-2 space-y-2">
         {/* Market Selector */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-1.5">
           {(Object.keys(GMX_MARKETS) as MarketKey[]).map((market) => {
             const data = markets.find((m) => m.market === market);
             return (
@@ -458,25 +460,25 @@ export default function Demo() {
 
         {/* Trading Panel */}
         <div className="terminal-panel">
-          <div className="terminal-header">
-            <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between px-2 py-1.5 border-b border-terminal-border">
+            <div className="flex items-center gap-2">
               <img
                 src={TOKEN_LOGOS[selectedMarket]}
                 alt={GMX_MARKETS[selectedMarket].symbol}
-                className="w-7 h-7 rounded-full"
+                className="w-5 h-5 rounded-full"
               />
-              <span className="font-display font-bold">
-                {GMX_MARKETS[selectedMarket].name}
+              <span className="font-display text-sm font-bold">
+                {GMX_MARKETS[selectedMarket].symbol}
               </span>
               {currentMarket && (
-                <span className="font-mono text-lg">
+                <span className="font-mono text-sm">
                   ${formatPrice(selectedMarket, currentMarket.price)}
                 </span>
               )}
             </div>
             {currentMarket && (
               <span
-                className={`font-mono ${
+                className={`font-mono text-xs ${
                   currentMarket.change24h >= 0 ? 'text-long' : 'text-short'
                 }`}
               >
@@ -485,14 +487,14 @@ export default function Demo() {
             )}
           </div>
 
-          <div className="terminal-body space-y-6">
+          <div className="p-2 space-y-3">
             {/* Long/Short Toggle */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-1.5">
               <button
                 onClick={() => setIsLong(true)}
-                className={`py-3 rounded-lg font-bold transition-all ${
+                className={`py-2 rounded text-sm font-bold transition-all ${
                   isLong
-                    ? 'bg-long/20 text-long border border-long/50 shadow-glow-long'
+                    ? 'bg-long/20 text-long border border-long/50'
                     : 'bg-terminal-tertiary text-terminal-secondary border border-terminal-border hover:text-long'
                 }`}
               >
@@ -500,9 +502,9 @@ export default function Demo() {
               </button>
               <button
                 onClick={() => setIsLong(false)}
-                className={`py-3 rounded-lg font-bold transition-all ${
+                className={`py-2 rounded text-sm font-bold transition-all ${
                   !isLong
-                    ? 'bg-short/20 text-short border border-short/50 shadow-glow-short'
+                    ? 'bg-short/20 text-short border border-short/50'
                     : 'bg-terminal-tertiary text-terminal-secondary border border-terminal-border hover:text-short'
                 }`}
               >
@@ -511,26 +513,26 @@ export default function Demo() {
             </div>
 
             {/* Collateral Input */}
-            <div className="space-y-2">
-              <label className="text-terminal-secondary text-sm">
+            <div className="space-y-1">
+              <label className="text-terminal-secondary text-xs">
                 Collateral (USDC)
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-terminal-secondary">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-terminal-secondary text-sm">
                   $
                 </span>
                 <input
                   type="number"
                   value={collateral}
                   onChange={(e) => setCollateral(e.target.value)}
-                  className="terminal-input w-full pl-7 pr-20"
-                  placeholder="100.00"
+                  className="terminal-input w-full pl-5 pr-16 py-1.5 text-sm"
+                  placeholder="100"
                 />
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
-                  {['25%', '50%', '100%'].map((pct) => (
+                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-0.5">
+                  {['25%', '50%', 'MAX'].map((pct) => (
                     <button
                       key={pct}
-                      className="text-xs px-2 py-1 bg-terminal-tertiary text-terminal-secondary rounded hover:text-accent-blue transition-colors"
+                      className="text-[9px] px-1.5 py-0.5 bg-terminal-tertiary text-terminal-secondary rounded hover:text-accent-blue transition-colors"
                     >
                       {pct}
                     </button>
@@ -548,42 +550,34 @@ export default function Demo() {
 
             {/* Trade Preview */}
             {preview && parseFloat(collateral) > 0 && (
-              <div className="bg-terminal-bg rounded-lg p-4 space-y-2">
-                <div className="text-sm text-terminal-secondary mb-3">
-                  Trade Preview
+              <div className="bg-terminal-bg rounded p-2 grid grid-cols-2 gap-x-2 gap-y-1 text-[10px]">
+                <div className="flex justify-between">
+                  <span className="text-terminal-secondary">Size</span>
+                  <span className="font-mono">{formatUsd(preview.size)}</span>
                 </div>
-                <div className="data-row">
-                  <span className="data-label">Position Size</span>
-                  <span className="data-value">{formatUsd(preview.size)}</span>
+                <div className="flex justify-between">
+                  <span className="text-terminal-secondary">Entry</span>
+                  <span className="font-mono">${formatPrice(selectedMarket, preview.entryPrice)}</span>
                 </div>
-                <div className="data-row">
-                  <span className="data-label">Entry Price</span>
-                  <span className="data-value">
-                    ${formatPrice(selectedMarket, preview.entryPrice)}
-                  </span>
+                <div className="flex justify-between">
+                  <span className="text-terminal-secondary">Liq</span>
+                  <span className="font-mono text-accent-orange">${formatPrice(selectedMarket, preview.liquidationPrice)}</span>
                 </div>
-                <div className="data-row">
-                  <span className="data-label">Liquidation Price</span>
-                  <span className="data-value text-accent-orange">
-                    ${formatPrice(selectedMarket, preview.liquidationPrice)}
-                  </span>
-                </div>
-                <div className="data-row">
-                  <span className="data-label">Est. Fees</span>
-                  <span className="data-value">{formatUsd(preview.fees)}</span>
+                <div className="flex justify-between">
+                  <span className="text-terminal-secondary">Fees</span>
+                  <span className="font-mono">{formatUsd(preview.fees)}</span>
                 </div>
               </div>
             )}
 
             {/* Submit Button */}
             <button
-              className={`w-full py-4 rounded-lg font-bold text-lg transition-all ${
+              className={`w-full py-2.5 rounded font-bold text-sm transition-all ${
                 isLong
                   ? 'bg-long/20 text-long border border-long/50 hover:bg-long/30'
                   : 'bg-short/20 text-short border border-short/50 hover:bg-short/30'
               }`}
               onClick={() => {
-                // In production, this would connect wallet and submit order
                 alert('Coming soon: Connect wallet to trade!');
               }}
             >
@@ -594,23 +588,21 @@ export default function Demo() {
 
         {/* Positions */}
         {(positionsLoading || positions.length > 0) && (
-          <div className="space-y-3">
-            <h2 className="font-display text-lg font-bold text-terminal-text flex items-center gap-2">
-              Your Positions
+          <div className="space-y-1.5">
+            <h2 className="font-display text-xs font-bold text-terminal-text flex items-center gap-1.5">
+              Positions
               {!positionsLoading && (
-                <span className="text-xs text-terminal-secondary bg-terminal-secondary px-2 py-0.5 rounded">
+                <span className="text-[10px] text-terminal-secondary bg-terminal-secondary px-1.5 py-0.5 rounded">
                   {positions.length}
                 </span>
               )}
             </h2>
             {positionsLoading ? (
-              <div className="terminal-panel">
-                <div className="terminal-body flex items-center justify-center py-8">
-                  <div className="text-terminal-secondary animate-pulse">Loading positions...</div>
-                </div>
+              <div className="terminal-panel p-2">
+                <div className="text-terminal-secondary text-xs animate-pulse text-center">Loading...</div>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-1.5">
                 {positions.map((pos, i) => (
                   <PositionCard key={i} position={pos} />
                 ))}
@@ -619,87 +611,52 @@ export default function Demo() {
           </div>
         )}
 
-        {/* Market Stats */}
+        {/* Market Stats - Compact */}
         {currentMarket && (
           <div className="terminal-panel">
-            <div className="terminal-header">
-              <span className="font-display font-medium">Market Stats</span>
+            <div className="px-2 py-1 border-b border-terminal-border">
+              <span className="font-display text-xs font-medium">Stats</span>
             </div>
-            <div className="terminal-body grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <div className="text-terminal-secondary text-xs">24h High</div>
+            <div className="p-2 grid grid-cols-3 gap-2 text-[10px]">
+              <div>
+                <div className="text-terminal-secondary">24h H/L</div>
                 <div className="font-mono">
-                  ${formatPrice(selectedMarket, currentMarket.high24h)}
+                  ${formatPrice(selectedMarket, currentMarket.high24h)} / ${formatPrice(selectedMarket, currentMarket.low24h)}
                 </div>
               </div>
-              <div className="space-y-1">
-                <div className="text-terminal-secondary text-xs">24h Low</div>
-                <div className="font-mono">
-                  ${formatPrice(selectedMarket, currentMarket.low24h)}
-                </div>
+              <div>
+                <div className="text-terminal-secondary">Volume</div>
+                <div className="font-mono">{formatUsd(currentMarket.volume24h)}</div>
               </div>
-              <div className="space-y-1">
-                <div className="text-terminal-secondary text-xs">
-                  24h Volume
-                </div>
-                <div className="font-mono">
-                  {formatUsd(currentMarket.volume24h)}
-                </div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-terminal-secondary text-xs">
-                  Funding Rate
-                </div>
-                <div
-                  className={`font-mono ${
-                    currentMarket.fundingRate >= 0 ? 'text-long' : 'text-short'
-                  }`}
-                >
+              <div>
+                <div className="text-terminal-secondary">Funding</div>
+                <div className={`font-mono ${currentMarket.fundingRate >= 0 ? 'text-long' : 'text-short'}`}>
                   {formatPercent(currentMarket.fundingRate * 100, 4)}
-                </div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-terminal-secondary text-xs">
-                  OI Long
-                </div>
-                <div className="font-mono text-long">
-                  {formatUsd(currentMarket.openInterestLong)}
-                </div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-terminal-secondary text-xs">
-                  OI Short
-                </div>
-                <div className="font-mono text-short">
-                  {formatUsd(currentMarket.openInterestShort)}
                 </div>
               </div>
             </div>
           </div>
         )}
-
-        {/* Footer */}
-        <footer className="text-center text-terminal-secondary text-sm py-4 border-t border-terminal-border">
-          <div className="flex items-center justify-center gap-3">
-            <a
-              href="https://fixr.nexus"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 hover:text-fixr-purple transition-colors"
-            >
-              <img src={FIXR_PFP} alt="Fixr" className="w-4 h-4 rounded-full" />
-              <span className="font-display font-medium">fixr.nexus</span>
-            </a>
-            <span className="text-terminal-muted">|</span>
-            <span className="text-gmx-blue font-medium">GMX</span>
-            <span className="text-terminal-muted">|</span>
-            <span className="text-arbitrum-blue font-medium">Arbitrum</span>
-          </div>
-          {error && (
-            <div className="text-short text-xs mt-2">Debug: {error}</div>
-          )}
-        </footer>
       </main>
+
+      {/* Footer - Fixed at bottom */}
+      <footer className="shrink-0 text-center text-terminal-secondary text-[10px] py-1.5 border-t border-terminal-border bg-terminal-secondary">
+        <div className="flex items-center justify-center gap-2">
+          <a
+            href="https://fixr.nexus"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 hover:text-fixr-purple transition-colors"
+          >
+            <img src={FIXR_PFP} alt="Fixr" className="w-3 h-3 rounded-full" />
+            <span className="font-display font-medium">fixr</span>
+          </a>
+          <span className="text-terminal-muted">•</span>
+          <span className="text-gmx-blue font-medium">GMX</span>
+          <span className="text-terminal-muted">•</span>
+          <span className="text-arbitrum-blue font-medium">Arbitrum</span>
+        </div>
+      </footer>
     </div>
   );
 }

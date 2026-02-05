@@ -160,6 +160,16 @@ body {
     animation: ticker 30s linear infinite;
   }
 
+  /* Smooth scrolling ticker for price bar */
+  .ticker-scroll {
+    animation: ticker 20s linear infinite;
+    width: max-content;
+  }
+
+  .ticker-scroll:hover {
+    animation-play-state: paused;
+  }
+
   /* Glow Effects */
   .glow-long {
     box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
