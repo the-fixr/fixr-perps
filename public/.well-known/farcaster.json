@@ -1,0 +1,27 @@
+{
+  "accountAssociation": {
+    "header": "eyJmaWQiOjI1NzQzOTMsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHhGREFmNzE5OTRiM0ZmQTZGQzVCQ2FmQjY1RjhiNzA5MkNFYjAxOTJBIn0",
+    "payload": "eyJkb21haW4iOiJwZXJwcy5maXhyLm5leHVzIn0",
+    "signature": "K4i0S1cGPv6GXJ/Db3Kgn9RAt0AryW+IQUrA1hx/D0gj9ZF+EU4/i/kpj90s5QRarT2hWaGqQJVFZvcrDScA1Bw="
+  },
+  "frame": {
+    "version": "1",
+    "name": "Fixr Perps",
+    "subtitle": "GMX V2 Trading Terminal",
+    "description": "Trade perpetuals on GMX V2 directly from Farcaster. ETH, BTC, ARB, LINK with up to 50x leverage on Arbitrum.",
+    "tagline": "Trade Perps on Arbitrum",
+    "primaryCategory": "finance",
+    "tags": ["trading", "defi", "perpetuals", "arbitrum", "gmx"],
+    "iconUrl": "https://perps.fixr.nexus/splash.png",
+    "homeUrl": "https://perps.fixr.nexus",
+    "imageUrl": "https://perps.fixr.nexus/frame-preview.png",
+    "heroImageUrl": "https://perps.fixr.nexus/frame-preview.png",
+    "buttonTitle": "Trade Perps on Arb",
+    "splashImageUrl": "https://perps.fixr.nexus/splash.png",
+    "splashBackgroundColor": "#0D1117",
+    "webhookUrl": "https://api.neynar.com/f/app/6f474686-1cf9-4deb-bcc8-4559c8c5808e/event",
+    "ogTitle": "Fixr Perps",
+    "ogDescription": "Trade perpetuals on GMX V2 with up to 50x leverage on Arbitrum",
+    "ogImageUrl": "https://perps.fixr.nexus/frame-preview.png"
+  }
+}
