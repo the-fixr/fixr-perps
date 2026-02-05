@@ -486,7 +486,10 @@ export default function Demo() {
 
   // Handle trade submission - opens confirmation modal
   const handleTrade = useCallback(async () => {
+    console.log('[handleTrade] Called', { isConnected, address, preview, collateral });
+
     if (!isConnected || !address) {
+      console.log('[handleTrade] Not connected, attempting connect');
       // Try to connect
       if (connectors.length > 0) {
         connect({ connector: connectors[0] });
@@ -495,17 +498,20 @@ export default function Demo() {
     }
 
     if (!preview) {
+      console.log('[handleTrade] No preview');
       setError('Unable to calculate trade preview');
       return;
     }
 
     const collateralNum = parseFloat(collateral) || 0;
     if (collateralNum <= 0) {
+      console.log('[handleTrade] No collateral');
       setError('Enter collateral amount');
       return;
     }
 
     setError(null);
+    console.log('[handleTrade] Checking balance/allowance for', address);
 
     // Check USDC balance and allowance
     try {
@@ -513,18 +519,21 @@ export default function Demo() {
         getUsdcBalance(address),
         checkAllowance(address),
       ]);
+      console.log('[handleTrade] Balance:', balance, 'Allowance:', allowance);
 
       const collateralBigInt = parseUnits(collateralNum.toString(), 6);
 
       if (balance < collateralBigInt) {
+        console.log('[handleTrade] Insufficient balance');
         setError(`Insufficient USDC. Have: ${(Number(balance) / 1e6).toFixed(2)}`);
         return;
       }
 
       // Check if approval is needed
       setNeedsApproval(allowance < collateralBigInt);
+      console.log('[handleTrade] Needs approval:', allowance < collateralBigInt);
     } catch (err) {
-      console.error('Failed to check balance/allowance:', err);
+      console.error('[handleTrade] Failed to check balance/allowance:', err);
       setError('Failed to check wallet balance');
       return;
     }
@@ -546,6 +555,7 @@ export default function Demo() {
     };
 
     // Reset state and show confirmation modal
+    console.log('[handleTrade] Showing modal with trade:', tradeInfo);
     setTradeStatus('confirm');
     setTradeError(undefined);
     resetTx();
