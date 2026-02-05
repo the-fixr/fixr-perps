@@ -852,13 +852,16 @@ export default function Demo() {
                   hasToken: !!result.notificationDetails.token,
                 });
 
-                // Send welcome notification
+                // Send welcome notification after delay for Neynar to store token
                 const fid = context.user?.fid;
                 if (fid) {
-                  console.log('[Frame] Sending welcome notification to FID:', fid);
-                  sendWelcomeNotification(fid).then(success => {
-                    console.log('[Frame] Welcome notification sent:', success);
-                  });
+                  console.log('[Frame] Waiting 3s for Neynar to store token...');
+                  setTimeout(() => {
+                    console.log('[Frame] Sending welcome notification to FID:', fid);
+                    sendWelcomeNotification(fid).then(success => {
+                      console.log('[Frame] Welcome notification sent:', success);
+                    });
+                  }, 3000);
                 }
               }
             } catch (addErr) {
