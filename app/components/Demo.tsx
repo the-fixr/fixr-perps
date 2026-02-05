@@ -648,6 +648,7 @@ export default function Demo() {
             rel="noopener noreferrer"
             className="flex items-center gap-1 hover:text-fixr-purple transition-colors"
           >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={FIXR_PFP} alt="Fixr" className="w-3 h-3 rounded-full" />
             <span className="font-display font-medium">fixr</span>
           </a>
@@ -656,6 +657,7 @@ export default function Demo() {
           <span className="text-terminal-muted">•</span>
           <span className="text-arbitrum-blue font-medium">Arbitrum</span>
         </div>
+        {error && <div className="text-short text-[9px] mt-0.5">{error}</div>}
       </footer>
     </div>
   );
