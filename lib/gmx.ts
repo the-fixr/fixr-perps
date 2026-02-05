@@ -5,7 +5,7 @@ import { publicClient, TOKENS } from './arbitrum';
 export const GMX_CONTRACTS = {
   DataStore: '0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8' as const,
   Reader: '0x38d91ED96283d62182Fc6d990C24097A918a4d9b' as const,
-  ExchangeRouter: '0x7C68C7866A64FA2160F78EEaE12217FFbf871fa8' as const,
+  ExchangeRouter: '0x602b805EedddBbD9ddff44A7dcBD46cb07849685' as const, // Current GMX V2 ExchangeRouter
   Router: '0x7452c558d45f8afC8c83dAe62C3f8A5BE19c71f6' as const,
   OrderVault: '0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5' as const,
 } as const;
