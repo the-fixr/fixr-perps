@@ -18,6 +18,11 @@ import {
 } from '../../lib/gmx';
 import { formatUsd, formatPercent } from '../../lib/arbitrum';
 import { useGmxSdk } from '../../hooks/useGmxSdk';
+import {
+  sendWelcomeNotification,
+  sendPositionAlert,
+  shouldAlertPosition,
+} from '../../lib/notifications';
 
 // ============ Constants ============
 
@@ -521,13 +526,34 @@ export default function Demo() {
     try {
       const userPositions = await getPositions(address);
       setPositions(userPositions);
+
+      // Check positions for +/- 25% alerts
+      const fid = frameData?.user?.fid;
+      if (fid && userPositions.length > 0) {
+        for (const pos of userPositions) {
+          const positionKey = `${pos.market}-${pos.isLong ? 'long' : 'short'}`;
+          const { shouldAlert, type } = shouldAlertPosition(
+            positionKey,
+            pos.market,
+            pos.isLong,
+            pos.pnlPercent
+          );
+
+          if (shouldAlert && type) {
+            console.log(`[Notifications] Position alert triggered: ${pos.market} ${type} ${pos.pnlPercent.toFixed(1)}%`);
+            sendPositionAlert(fid, pos.market, pos.pnlPercent, pos.isLong).then(success => {
+              console.log(`[Notifications] Position alert sent: ${success}`);
+            });
+          }
+        }
+      }
     } catch (err) {
       console.error('Failed to fetch positions:', err);
       setPositions([]);
     } finally {
       setPositionsLoading(false);
     }
-  }, []);
+  }, [frameData?.user?.fid]);
 
   // Auto-connect on mount if connector available
   useEffect(() => {
@@ -820,11 +846,20 @@ export default function Demo() {
               const result = await window.frame.sdk.actions.addMiniApp();
               console.log('[Frame] addMiniApp result:', result);
 
-              if (result.notificationDetails) {
+              if (result.added && result.notificationDetails) {
                 console.log('[Frame] Notifications enabled:', {
                   url: result.notificationDetails.url,
                   hasToken: !!result.notificationDetails.token,
                 });
+
+                // Send welcome notification
+                const fid = context.user?.fid;
+                if (fid) {
+                  console.log('[Frame] Sending welcome notification to FID:', fid);
+                  sendWelcomeNotification(fid).then(success => {
+                    console.log('[Frame] Welcome notification sent:', success);
+                  });
+                }
               }
             } catch (addErr) {
               // User rejected or other error - not critical, continue
