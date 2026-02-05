@@ -263,6 +263,7 @@ export default function Demo() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
   const [walletAddress, setWalletAddress] = useState<`0x${string}` | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Get current market data
   const currentMarket = markets.find((m) => m.market === selectedMarket);
@@ -290,6 +291,63 @@ export default function Demo() {
       setPositionsLoading(false);
     }
   }, []);
+
+  // Handle trade submission
+  const handleTrade = useCallback(async () => {
+    if (!window.frame?.sdk) {
+      setError('Frame SDK not available');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      // Request wallet connection via Frame SDK
+      const provider = window.frame.sdk.wallet.ethProvider;
+      const accounts = await provider.request({ method: 'eth_requestAccounts' }) as string[];
+
+      if (!accounts || accounts.length === 0) {
+        throw new Error('No wallet connected');
+      }
+
+      const userAddress = accounts[0] as `0x${string}`;
+      setWalletAddress(userAddress);
+
+      // For now, show confirmation of what would be traded
+      const tradeInfo = preview ? {
+        market: GMX_MARKETS[selectedMarket].name,
+        direction: isLong ? 'LONG' : 'SHORT',
+        size: formatUsd(preview.size),
+        leverage: `${leverage}x`,
+        entryPrice: formatPrice(selectedMarket, preview.entryPrice),
+      } : null;
+
+      if (tradeInfo) {
+        // In production, this would build and send a GMX transaction
+        // For now, show the trade details
+        const confirmed = confirm(
+          `Open ${tradeInfo.direction} Position?\n\n` +
+          `Market: ${tradeInfo.market}\n` +
+          `Size: ${tradeInfo.size}\n` +
+          `Leverage: ${tradeInfo.leverage}\n` +
+          `Entry: $${tradeInfo.entryPrice}\n\n` +
+          `Wallet: ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}\n\n` +
+          `(GMX contract integration coming soon)`
+        );
+
+        if (confirmed) {
+          // Refresh positions after trade
+          fetchPositions(userAddress);
+        }
+      }
+    } catch (err) {
+      console.error('Trade error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to execute trade');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [preview, selectedMarket, isLong, leverage, fetchPositions]);
 
   // Initialize Frame SDK
   useEffect(() => {
@@ -380,8 +438,8 @@ export default function Demo() {
       )
     : null;
 
-  // Fixr PFP URL
-  const FIXR_PFP = 'https://imagedelivery.net/BXluQx4ige9GuW0Ia56BHw/cb29e65f-deed-422f-d5e0-db1ec1c71300/rectcrop3';
+  // Fixr PFP - local file
+  const FIXR_PFP = '/fixrpfp.png';
 
   // Loading state
   if (isLoading) {
@@ -576,12 +634,11 @@ export default function Demo() {
                 isLong
                   ? 'bg-long/20 text-long border border-long/50 hover:bg-long/30'
                   : 'bg-short/20 text-short border border-short/50 hover:bg-short/30'
-              }`}
-              onClick={() => {
-                alert('Coming soon: Connect wallet to trade!');
-              }}
+              } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+              onClick={handleTrade}
+              disabled={isSubmitting || !parseFloat(collateral)}
             >
-              {isLong ? 'Open Long' : 'Open Short'}
+              {isSubmitting ? 'Connecting...' : walletAddress ? (isLong ? 'Open Long' : 'Open Short') : 'Connect & Trade'}
             </button>
           </div>
         </div>
