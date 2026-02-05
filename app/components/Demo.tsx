@@ -174,6 +174,99 @@ function LeverageSlider({
   );
 }
 
+// Trade confirmation modal
+interface TradeInfo {
+  market: string;
+  symbol: string;
+  direction: 'LONG' | 'SHORT';
+  size: string;
+  leverage: string;
+  entryPrice: string;
+  liqPrice: string;
+  walletAddress: string;
+}
+
+function TradeConfirmModal({
+  trade,
+  onConfirm,
+  onCancel,
+}: {
+  trade: TradeInfo;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const isLong = trade.direction === 'LONG';
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+      <div className="bg-terminal-secondary border border-terminal-border rounded-lg w-full max-w-sm overflow-hidden">
+        {/* Header */}
+        <div className={`px-4 py-3 border-b border-terminal-border ${isLong ? 'bg-long/10' : 'bg-short/10'}`}>
+          <h3 className="font-display font-bold text-base">
+            Confirm {trade.direction}
+          </h3>
+          <p className="text-terminal-secondary text-xs">{trade.symbol}</p>
+        </div>
+
+        {/* Trade Details */}
+        <div className="p-4 space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-terminal-secondary">Direction</span>
+            <span className={`font-bold ${isLong ? 'text-long' : 'text-short'}`}>
+              {trade.direction}
+            </span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-terminal-secondary">Size</span>
+            <span className="font-mono">{trade.size}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-terminal-secondary">Leverage</span>
+            <span className="font-mono text-fixr-purple">{trade.leverage}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-terminal-secondary">Entry Price</span>
+            <span className="font-mono">${trade.entryPrice}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-terminal-secondary">Liq Price</span>
+            <span className="font-mono text-accent-orange">${trade.liqPrice}</span>
+          </div>
+          <div className="border-t border-terminal-border my-2 pt-2">
+            <div className="flex justify-between text-xs">
+              <span className="text-terminal-secondary">Wallet</span>
+              <span className="font-mono text-terminal-muted">{trade.walletAddress}</span>
+            </div>
+          </div>
+          <div className="text-[10px] text-terminal-muted text-center pt-1">
+            GMX contract integration coming soon
+          </div>
+        </div>
+
+        {/* Buttons */}
+        <div className="p-4 pt-0 grid grid-cols-2 gap-2">
+          <button
+            onClick={onCancel}
+            className="py-2.5 rounded font-bold text-sm bg-terminal-tertiary text-terminal-secondary border border-terminal-border hover:text-terminal-text transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className={`py-2.5 rounded font-bold text-sm transition-colors ${
+              isLong
+                ? 'bg-long/20 text-long border border-long/50 hover:bg-long/30'
+                : 'bg-short/20 text-short border border-short/50 hover:bg-short/30'
+            }`}
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Position card (compact)
 function PositionCard({ position }: { position: Position }) {
   const isProfit = parseFloat(position.pnl.replace(/[^0-9.-]/g, '')) >= 0;
@@ -267,6 +360,8 @@ export default function Demo() {
   const [leverage, setLeverage] = useState(10);
   const [positions, setPositions] = useState<Position[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingTrade, setPendingTrade] = useState<TradeInfo | null>(null);
 
   // Get current market data
   const currentMarket = markets.find((m) => m.market === selectedMarket);
@@ -322,7 +417,7 @@ export default function Demo() {
     }
   }, [address, fetchPositions]);
 
-  // Handle trade submission
+  // Handle trade submission - opens confirmation modal
   const handleTrade = useCallback(() => {
     if (!isConnected || !address) {
       // Try to connect
@@ -339,8 +434,8 @@ export default function Demo() {
 
     setError(null);
 
-    // Build trade info for confirmation
-    const tradeInfo = {
+    // Build trade info for confirmation modal
+    const tradeInfo: TradeInfo = {
       market: GMX_MARKETS[selectedMarket].name,
       symbol: GMX_MARKETS[selectedMarket].symbol,
       direction: isLong ? 'LONG' : 'SHORT',
@@ -348,25 +443,31 @@ export default function Demo() {
       leverage: `${leverage}x`,
       entryPrice: formatPrice(selectedMarket, preview.entryPrice),
       liqPrice: formatPrice(selectedMarket, preview.liquidationPrice),
+      walletAddress: `${address.slice(0, 6)}...${address.slice(-4)}`,
     };
 
-    // For now, show confirmation - GMX contract calls would go here
-    // GMX V2 uses the ExchangeRouter contract for creating positions
-    const confirmed = confirm(
-      `Open ${tradeInfo.direction} ${tradeInfo.symbol}?\n\n` +
-      `Size: ${tradeInfo.size}\n` +
-      `Leverage: ${tradeInfo.leverage}\n` +
-      `Entry: $${tradeInfo.entryPrice}\n` +
-      `Liq Price: $${tradeInfo.liqPrice}\n\n` +
-      `Wallet: ${address.slice(0, 6)}...${address.slice(-4)}\n\n` +
-      `GMX contract integration coming soon!`
-    );
+    // Show confirmation modal
+    setPendingTrade(tradeInfo);
+    setShowConfirmModal(true);
+  }, [isConnected, address, preview, selectedMarket, isLong, leverage, connect, connectors]);
 
-    if (confirmed && address) {
-      // Refresh positions
+  // Handle trade confirmation from modal
+  const handleConfirmTrade = useCallback(() => {
+    // GMX V2 contract calls would go here
+    // For now, just close modal and refresh positions
+    setShowConfirmModal(false);
+    setPendingTrade(null);
+
+    if (address) {
       fetchPositions(address);
     }
-  }, [isConnected, address, preview, selectedMarket, isLong, leverage, connect, connectors, fetchPositions]);
+  }, [address, fetchPositions]);
+
+  // Handle cancel from modal
+  const handleCancelTrade = useCallback(() => {
+    setShowConfirmModal(false);
+    setPendingTrade(null);
+  }, []);
 
   // Initialize Frame SDK
   useEffect(() => {
@@ -712,6 +813,15 @@ export default function Demo() {
         </div>
         {error && <div className="text-short text-[9px] mt-0.5">{error}</div>}
       </footer>
+
+      {/* Trade Confirmation Modal */}
+      {showConfirmModal && pendingTrade && (
+        <TradeConfirmModal
+          trade={pendingTrade}
+          onConfirm={handleConfirmTrade}
+          onCancel={handleCancelTrade}
+        />
+      )}
     </div>
   );
 }
