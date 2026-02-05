@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useAccount, useConnect } from 'wagmi';
+import { useAccount, useConnect, useSendTransaction, useWaitForTransactionReceipt } from 'wagmi';
+import { parseUnits } from 'viem';
 import type { FrameContext } from '../types/frame';
 import {
+  GMX_CONTRACTS,
   GMX_MARKETS,
   type MarketKey,
   type MarketData,
@@ -12,8 +14,13 @@ import {
   getPositions,
   calculateTradePreview,
   formatPrice,
+  buildCreateOrderCalldata,
+  buildApproveCalldata,
+  checkAllowance,
+  getUsdcBalance,
+  calculateAcceptablePrice,
 } from '../../lib/gmx';
-import { formatUsd, formatPercent } from '../../lib/arbitrum';
+import { formatUsd, formatPercent, TOKENS } from '../../lib/arbitrum';
 
 // ============ Constants ============
 
@@ -175,27 +182,40 @@ function LeverageSlider({
 }
 
 // Trade confirmation modal
+type TradeStatus = 'confirm' | 'approving' | 'submitting' | 'success' | 'error';
+
 interface TradeInfo {
   market: string;
+  marketKey: MarketKey;
   symbol: string;
   direction: 'LONG' | 'SHORT';
   size: string;
+  sizeNum: number;
   leverage: string;
   entryPrice: string;
+  entryPriceNum: number;
   liqPrice: string;
   walletAddress: string;
+  collateralAmount: number;
 }
 
 function TradeConfirmModal({
   trade,
+  status,
+  errorMessage,
+  needsApproval,
   onConfirm,
   onCancel,
 }: {
   trade: TradeInfo;
+  status: TradeStatus;
+  errorMessage?: string;
+  needsApproval: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
   const isLong = trade.direction === 'LONG';
+  const isPending = status === 'approving' || status === 'submitting';
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
@@ -203,64 +223,104 @@ function TradeConfirmModal({
         {/* Header */}
         <div className={`px-4 py-3 border-b border-terminal-border ${isLong ? 'bg-long/10' : 'bg-short/10'}`}>
           <h3 className="font-display font-bold text-base">
-            Confirm {trade.direction}
+            {status === 'success' ? 'Order Submitted!' : status === 'error' ? 'Transaction Failed' : `Confirm ${trade.direction}`}
           </h3>
           <p className="text-terminal-secondary text-xs">{trade.symbol}</p>
         </div>
 
         {/* Trade Details */}
         <div className="p-4 space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-terminal-secondary">Direction</span>
-            <span className={`font-bold ${isLong ? 'text-long' : 'text-short'}`}>
-              {trade.direction}
-            </span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-terminal-secondary">Size</span>
-            <span className="font-mono">{trade.size}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-terminal-secondary">Leverage</span>
-            <span className="font-mono text-fixr-purple">{trade.leverage}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-terminal-secondary">Entry Price</span>
-            <span className="font-mono">${trade.entryPrice}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-terminal-secondary">Liq Price</span>
-            <span className="font-mono text-accent-orange">${trade.liqPrice}</span>
-          </div>
-          <div className="border-t border-terminal-border my-2 pt-2">
-            <div className="flex justify-between text-xs">
-              <span className="text-terminal-secondary">Wallet</span>
-              <span className="font-mono text-terminal-muted">{trade.walletAddress}</span>
+          {status === 'success' ? (
+            <div className="text-center py-4">
+              <div className="text-long text-2xl mb-2">✓</div>
+              <div className="text-sm text-terminal-text">Order submitted to GMX</div>
+              <div className="text-xs text-terminal-secondary mt-1">
+                Keepers will execute your order shortly
+              </div>
             </div>
-          </div>
-          <div className="text-[10px] text-terminal-muted text-center pt-1">
-            GMX contract integration coming soon
-          </div>
+          ) : status === 'error' ? (
+            <div className="text-center py-4">
+              <div className="text-short text-2xl mb-2">✗</div>
+              <div className="text-sm text-terminal-text">Transaction failed</div>
+              <div className="text-xs text-short mt-1">{errorMessage || 'Unknown error'}</div>
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-between text-sm">
+                <span className="text-terminal-secondary">Direction</span>
+                <span className={`font-bold ${isLong ? 'text-long' : 'text-short'}`}>
+                  {trade.direction}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-terminal-secondary">Size</span>
+                <span className="font-mono">{trade.size}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-terminal-secondary">Leverage</span>
+                <span className="font-mono text-fixr-purple">{trade.leverage}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-terminal-secondary">Entry Price</span>
+                <span className="font-mono">${trade.entryPrice}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-terminal-secondary">Liq Price</span>
+                <span className="font-mono text-accent-orange">${trade.liqPrice}</span>
+              </div>
+              <div className="border-t border-terminal-border my-2 pt-2">
+                <div className="flex justify-between text-xs">
+                  <span className="text-terminal-secondary">Collateral</span>
+                  <span className="font-mono">${trade.collateralAmount.toFixed(2)} USDC</span>
+                </div>
+                <div className="flex justify-between text-xs mt-1">
+                  <span className="text-terminal-secondary">Exec Fee</span>
+                  <span className="font-mono">~0.0003 ETH</span>
+                </div>
+              </div>
+              {isPending && (
+                <div className="text-center py-2">
+                  <div className="animate-spin inline-block w-5 h-5 border-2 border-fixr-purple border-t-transparent rounded-full mb-2"></div>
+                  <div className="text-xs text-terminal-secondary">
+                    {status === 'approving' ? 'Approving USDC...' : 'Submitting order...'}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {/* Buttons */}
         <div className="p-4 pt-0 grid grid-cols-2 gap-2">
-          <button
-            onClick={onCancel}
-            className="py-2.5 rounded font-bold text-sm bg-terminal-tertiary text-terminal-secondary border border-terminal-border hover:text-terminal-text transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className={`py-2.5 rounded font-bold text-sm transition-colors ${
-              isLong
-                ? 'bg-long/20 text-long border border-long/50 hover:bg-long/30'
-                : 'bg-short/20 text-short border border-short/50 hover:bg-short/30'
-            }`}
-          >
-            Confirm
-          </button>
+          {status === 'success' || status === 'error' ? (
+            <button
+              onClick={onCancel}
+              className="col-span-2 py-2.5 rounded font-bold text-sm bg-terminal-tertiary text-terminal-secondary border border-terminal-border hover:text-terminal-text transition-colors"
+            >
+              Close
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={onCancel}
+                disabled={isPending}
+                className="py-2.5 rounded font-bold text-sm bg-terminal-tertiary text-terminal-secondary border border-terminal-border hover:text-terminal-text transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirm}
+                disabled={isPending}
+                className={`py-2.5 rounded font-bold text-sm transition-colors disabled:opacity-50 ${
+                  isLong
+                    ? 'bg-long/20 text-long border border-long/50 hover:bg-long/30'
+                    : 'bg-short/20 text-short border border-short/50 hover:bg-short/30'
+                }`}
+              >
+                {needsApproval ? 'Approve & Trade' : 'Confirm Trade'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -352,6 +412,10 @@ export default function Demo() {
   const { address, isConnected } = useAccount();
   const { connect, connectors, isPending: isConnecting } = useConnect();
 
+  // Transaction hooks
+  const { sendTransaction, data: txHash, reset: resetTx } = useSendTransaction();
+  const { isSuccess: isTxSuccess } = useWaitForTransactionReceipt({ hash: txHash });
+
   // Trading state
   const [markets, setMarkets] = useState<MarketData[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<MarketKey>('ETH-USD');
@@ -362,6 +426,9 @@ export default function Demo() {
   const [positionsLoading, setPositionsLoading] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingTrade, setPendingTrade] = useState<TradeInfo | null>(null);
+  const [tradeStatus, setTradeStatus] = useState<TradeStatus>('confirm');
+  const [tradeError, setTradeError] = useState<string | undefined>();
+  const [needsApproval, setNeedsApproval] = useState(false);
 
   // Get current market data
   const currentMarket = markets.find((m) => m.market === selectedMarket);
@@ -418,7 +485,7 @@ export default function Demo() {
   }, [address, fetchPositions]);
 
   // Handle trade submission - opens confirmation modal
-  const handleTrade = useCallback(() => {
+  const handleTrade = useCallback(async () => {
     if (!isConnected || !address) {
       // Try to connect
       if (connectors.length > 0) {
@@ -432,42 +499,145 @@ export default function Demo() {
       return;
     }
 
+    const collateralNum = parseFloat(collateral) || 0;
+    if (collateralNum <= 0) {
+      setError('Enter collateral amount');
+      return;
+    }
+
     setError(null);
+
+    // Check USDC balance and allowance
+    try {
+      const [balance, allowance] = await Promise.all([
+        getUsdcBalance(address),
+        checkAllowance(address),
+      ]);
+
+      const collateralBigInt = parseUnits(collateralNum.toString(), 6);
+
+      if (balance < collateralBigInt) {
+        setError(`Insufficient USDC. Have: ${(Number(balance) / 1e6).toFixed(2)}`);
+        return;
+      }
+
+      // Check if approval is needed
+      setNeedsApproval(allowance < collateralBigInt);
+    } catch (err) {
+      console.error('Failed to check balance/allowance:', err);
+      setError('Failed to check wallet balance');
+      return;
+    }
 
     // Build trade info for confirmation modal
     const tradeInfo: TradeInfo = {
       market: GMX_MARKETS[selectedMarket].name,
+      marketKey: selectedMarket,
       symbol: GMX_MARKETS[selectedMarket].symbol,
       direction: isLong ? 'LONG' : 'SHORT',
       size: formatUsd(preview.size),
+      sizeNum: preview.size,
       leverage: `${leverage}x`,
       entryPrice: formatPrice(selectedMarket, preview.entryPrice),
+      entryPriceNum: preview.entryPrice,
       liqPrice: formatPrice(selectedMarket, preview.liquidationPrice),
       walletAddress: `${address.slice(0, 6)}...${address.slice(-4)}`,
+      collateralAmount: collateralNum,
     };
 
-    // Show confirmation modal
+    // Reset state and show confirmation modal
+    setTradeStatus('confirm');
+    setTradeError(undefined);
+    resetTx();
     setPendingTrade(tradeInfo);
     setShowConfirmModal(true);
-  }, [isConnected, address, preview, selectedMarket, isLong, leverage, connect, connectors]);
+  }, [isConnected, address, preview, selectedMarket, isLong, leverage, collateral, connect, connectors, resetTx]);
 
-  // Handle trade confirmation from modal
-  const handleConfirmTrade = useCallback(() => {
-    // GMX V2 contract calls would go here
-    // For now, just close modal and refresh positions
-    setShowConfirmModal(false);
-    setPendingTrade(null);
+  // Handle trade confirmation from modal - executes real trade
+  const handleConfirmTrade = useCallback(async () => {
+    if (!pendingTrade || !address) return;
 
-    if (address) {
-      fetchPositions(address);
+    try {
+      const collateralBigInt = parseUnits(pendingTrade.collateralAmount.toString(), 6);
+
+      // Step 1: Approve if needed
+      if (needsApproval) {
+        setTradeStatus('approving');
+
+        const approveData = buildApproveCalldata(collateralBigInt * 10n); // Approve 10x for future trades
+
+        sendTransaction({
+          to: TOKENS.USDC,
+          data: approveData,
+        });
+
+        // Wait for approval to be sent, then continue to order
+        // The useEffect below will handle moving to order submission
+        return;
+      }
+
+      // Step 2: Submit order to GMX
+      await submitOrder();
+    } catch (err) {
+      console.error('Trade failed:', err);
+      setTradeStatus('error');
+      setTradeError(err instanceof Error ? err.message : 'Transaction failed');
     }
-  }, [address, fetchPositions]);
+  }, [pendingTrade, address, needsApproval, sendTransaction]);
+
+  // Submit order to GMX
+  const submitOrder = useCallback(async () => {
+    if (!pendingTrade || !address) return;
+
+    setTradeStatus('submitting');
+
+    const acceptablePrice = calculateAcceptablePrice(
+      pendingTrade.entryPriceNum,
+      pendingTrade.direction === 'LONG',
+      0.5 // 0.5% slippage
+    );
+
+    const { calldata, value } = buildCreateOrderCalldata({
+      market: pendingTrade.marketKey,
+      isLong: pendingTrade.direction === 'LONG',
+      collateralAmount: pendingTrade.collateralAmount,
+      sizeDeltaUsd: pendingTrade.sizeNum,
+      acceptablePrice,
+      account: address,
+    });
+
+    sendTransaction({
+      to: GMX_CONTRACTS.ExchangeRouter,
+      data: calldata,
+      value,
+    });
+  }, [pendingTrade, address, sendTransaction]);
+
+  // Watch for transaction success and move to next step
+  useEffect(() => {
+    if (isTxSuccess && tradeStatus === 'approving') {
+      // Approval succeeded, now submit order
+      setNeedsApproval(false);
+      resetTx();
+      submitOrder();
+    } else if (isTxSuccess && tradeStatus === 'submitting') {
+      // Order submitted successfully
+      setTradeStatus('success');
+      // Refresh positions after a delay (keeper needs to execute)
+      if (address) {
+        setTimeout(() => fetchPositions(address), 3000);
+      }
+    }
+  }, [isTxSuccess, tradeStatus, address, fetchPositions, resetTx, submitOrder]);
 
   // Handle cancel from modal
   const handleCancelTrade = useCallback(() => {
     setShowConfirmModal(false);
     setPendingTrade(null);
-  }, []);
+    setTradeStatus('confirm');
+    setTradeError(undefined);
+    resetTx();
+  }, [resetTx]);
 
   // Initialize Frame SDK
   useEffect(() => {
@@ -818,6 +988,9 @@ export default function Demo() {
       {showConfirmModal && pendingTrade && (
         <TradeConfirmModal
           trade={pendingTrade}
+          status={tradeStatus}
+          errorMessage={tradeError}
+          needsApproval={needsApproval}
           onConfirm={handleConfirmTrade}
           onCancel={handleCancelTrade}
         />

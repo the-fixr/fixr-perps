@@ -1,4 +1,4 @@
-import { formatUnits, getAddress } from 'viem';
+import { formatUnits, getAddress, parseUnits, encodeFunctionData } from 'viem';
 import { publicClient, TOKENS } from './arbitrum';
 
 // GMX V2 Contract Addresses on Arbitrum
@@ -437,4 +437,270 @@ export function formatPrice(market: MarketKey, price: number): string {
     minimumFractionDigits: precision,
     maximumFractionDigits: precision,
   });
+}
+
+// ============ GMX V2 Order Creation ============
+
+// Order types
+export const ORDER_TYPE = {
+  MarketSwap: 0,
+  LimitSwap: 1,
+  MarketIncrease: 2,
+  LimitIncrease: 3,
+  MarketDecrease: 4,
+  LimitDecrease: 5,
+  StopLossDecrease: 6,
+  Liquidation: 7,
+} as const;
+
+// Decrease position swap type
+export const DECREASE_POSITION_SWAP_TYPE = {
+  NoSwap: 0,
+  SwapPnlTokenToCollateralToken: 1,
+  SwapCollateralTokenToPnlToken: 2,
+} as const;
+
+// ERC20 ABI for approvals
+export const ERC20_ABI = [
+  {
+    name: 'approve',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    name: 'allowance',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const;
+
+// GMX ExchangeRouter ABI for creating orders
+export const EXCHANGE_ROUTER_ABI = [
+  {
+    name: 'createOrder',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          {
+            name: 'addresses',
+            type: 'tuple',
+            components: [
+              { name: 'receiver', type: 'address' },
+              { name: 'callbackContract', type: 'address' },
+              { name: 'uiFeeReceiver', type: 'address' },
+              { name: 'market', type: 'address' },
+              { name: 'initialCollateralToken', type: 'address' },
+              { name: 'swapPath', type: 'address[]' },
+            ],
+          },
+          {
+            name: 'numbers',
+            type: 'tuple',
+            components: [
+              { name: 'sizeDeltaUsd', type: 'uint256' },
+              { name: 'initialCollateralDeltaAmount', type: 'uint256' },
+              { name: 'triggerPrice', type: 'uint256' },
+              { name: 'acceptablePrice', type: 'uint256' },
+              { name: 'executionFee', type: 'uint256' },
+              { name: 'callbackGasLimit', type: 'uint256' },
+              { name: 'minOutputAmount', type: 'uint256' },
+            ],
+          },
+          { name: 'orderType', type: 'uint8' },
+          { name: 'decreasePositionSwapType', type: 'uint8' },
+          { name: 'isLong', type: 'bool' },
+          { name: 'shouldUnwrapNativeToken', type: 'bool' },
+          { name: 'referralCode', type: 'bytes32' },
+        ],
+      },
+    ],
+    outputs: [{ name: '', type: 'bytes32' }],
+  },
+  {
+    name: 'sendWnt',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'receiver', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'sendTokens',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'token', type: 'address' },
+      { name: 'receiver', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'multicall',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [{ name: 'data', type: 'bytes[]' }],
+    outputs: [{ name: 'results', type: 'bytes[]' }],
+  },
+] as const;
+
+// GMX execution fee (in ETH) - approximately 0.0003 ETH on Arbitrum
+export const EXECUTION_FEE = parseUnits('0.0003', 18);
+
+// Fixr referral code (32 bytes)
+export const FIXR_REFERRAL_CODE = '0x6669787200000000000000000000000000000000000000000000000000000000' as `0x${string}`;
+
+// Order creation parameters
+export interface CreateOrderParams {
+  market: MarketKey;
+  isLong: boolean;
+  collateralAmount: number; // in USDC
+  sizeDeltaUsd: number; // position size in USD
+  acceptablePrice: number; // with slippage applied
+  account: `0x${string}`;
+}
+
+// Build the multicall data for creating an order
+export function buildCreateOrderCalldata(params: CreateOrderParams): {
+  calldata: `0x${string}`;
+  value: bigint;
+} {
+  const marketInfo = GMX_MARKETS[params.market];
+
+  // Convert amounts to proper units
+  const collateralAmountBigInt = parseUnits(params.collateralAmount.toString(), 6); // USDC has 6 decimals
+  const sizeDeltaUsdBigInt = parseUnits(params.sizeDeltaUsd.toString(), 30); // GMX uses 30 decimals for USD
+
+  // Acceptable price with 30 decimals
+  // For longs: we want to buy at most at this price (higher = more slippage tolerance)
+  // For shorts: we want to sell at least at this price (lower = more slippage tolerance)
+  const acceptablePriceBigInt = parseUnits(params.acceptablePrice.toString(), 30);
+
+  // Order parameters
+  const orderParams = {
+    addresses: {
+      receiver: params.account,
+      callbackContract: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+      uiFeeReceiver: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+      market: marketInfo.marketToken,
+      initialCollateralToken: TOKENS.USDC,
+      swapPath: [] as `0x${string}`[],
+    },
+    numbers: {
+      sizeDeltaUsd: sizeDeltaUsdBigInt,
+      initialCollateralDeltaAmount: collateralAmountBigInt,
+      triggerPrice: 0n,
+      acceptablePrice: acceptablePriceBigInt,
+      executionFee: EXECUTION_FEE,
+      callbackGasLimit: 0n,
+      minOutputAmount: 0n,
+    },
+    orderType: ORDER_TYPE.MarketIncrease,
+    decreasePositionSwapType: DECREASE_POSITION_SWAP_TYPE.NoSwap,
+    isLong: params.isLong,
+    shouldUnwrapNativeToken: false,
+    referralCode: FIXR_REFERRAL_CODE,
+  };
+
+  // Build multicall: sendWnt (execution fee) + sendTokens (collateral) + createOrder
+  const sendWntData = encodeFunctionData({
+    abi: EXCHANGE_ROUTER_ABI,
+    functionName: 'sendWnt',
+    args: [GMX_CONTRACTS.OrderVault, EXECUTION_FEE],
+  });
+
+  const sendTokensData = encodeFunctionData({
+    abi: EXCHANGE_ROUTER_ABI,
+    functionName: 'sendTokens',
+    args: [TOKENS.USDC, GMX_CONTRACTS.OrderVault, collateralAmountBigInt],
+  });
+
+  const createOrderData = encodeFunctionData({
+    abi: EXCHANGE_ROUTER_ABI,
+    functionName: 'createOrder',
+    args: [orderParams],
+  });
+
+  // Multicall with all three calls
+  const multicallData = encodeFunctionData({
+    abi: EXCHANGE_ROUTER_ABI,
+    functionName: 'multicall',
+    args: [[sendWntData, sendTokensData, createOrderData]],
+  });
+
+  return {
+    calldata: multicallData,
+    value: EXECUTION_FEE,
+  };
+}
+
+// Check USDC allowance
+export async function checkAllowance(
+  owner: `0x${string}`,
+  spender: `0x${string}` = GMX_CONTRACTS.Router
+): Promise<bigint> {
+  return publicClient.readContract({
+    address: TOKENS.USDC,
+    abi: ERC20_ABI,
+    functionName: 'allowance',
+    args: [owner, spender],
+  });
+}
+
+// Check USDC balance
+export async function getUsdcBalance(account: `0x${string}`): Promise<bigint> {
+  return publicClient.readContract({
+    address: TOKENS.USDC,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [account],
+  });
+}
+
+// Build approve calldata
+export function buildApproveCalldata(amount: bigint): `0x${string}` {
+  return encodeFunctionData({
+    abi: ERC20_ABI,
+    functionName: 'approve',
+    args: [GMX_CONTRACTS.Router, amount],
+  });
+}
+
+// Calculate acceptable price with slippage
+export function calculateAcceptablePrice(
+  price: number,
+  isLong: boolean,
+  slippagePercent: number = 0.5
+): number {
+  const slippageMultiplier = slippagePercent / 100;
+  if (isLong) {
+    // For longs, we're willing to pay up to this price
+    return price * (1 + slippageMultiplier);
+  } else {
+    // For shorts, we want to receive at least this price
+    return price * (1 - slippageMultiplier);
+  }
 }
