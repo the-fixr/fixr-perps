@@ -21,12 +21,20 @@ export interface FrameContext {
     };
   }
   
+  // EIP-1193 Provider interface
+  export interface EIP1193Provider {
+    request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+  }
+
   export interface FrameSDK {
     context: Promise<FrameContext>;
     actions: {
       ready: () => void;
       openUrl: (url: string) => void;
       close: () => void;
+    };
+    wallet: {
+      ethProvider: EIP1193Provider;
     };
   }
   
