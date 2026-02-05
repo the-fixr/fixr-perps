@@ -1,16 +1,20 @@
 'use client';
 
 import { useMemo, useCallback } from 'react';
-import { useWalletClient, useAccount } from 'wagmi';
+import { useWalletClient, useAccount, useSwitchChain, useChainId } from 'wagmi';
 import { parseUnits } from 'viem';
 import { GmxSdk } from '@gmx-io/sdk';
 import { GMX_SDK_CONFIG, GMX_MARKET_ADDRESSES, USDC_ADDRESS } from '@/lib/gmx-sdk';
 import type { MarketKey } from '@/lib/gmx';
 
+const ARBITRUM_CHAIN_ID = 42161;
+
 // Create SDK instance from wagmi wallet client
 export function useGmxSdk() {
   const { data: walletClient } = useWalletClient();
   const { address } = useAccount();
+  const { switchChainAsync } = useSwitchChain();
+  const chainId = useChainId();
 
   const sdk = useMemo(() => {
     if (!walletClient || !address) return null;
@@ -48,9 +52,19 @@ export function useGmxSdk() {
         collateralAmount: collateralAmount.toString(),
         leverage: params.leverage,
         slippageBps: params.slippageBps ?? 100,
+        currentChainId: chainId,
       });
 
       try {
+        // CRITICAL: Ensure we're on Arbitrum before sending the transaction
+        if (chainId !== ARBITRUM_CHAIN_ID) {
+          console.log('[useGmxSdk] Switching to Arbitrum...');
+          await switchChainAsync({ chainId: ARBITRUM_CHAIN_ID });
+          // Small delay to let the chain switch propagate
+          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log('[useGmxSdk] Chain switched to Arbitrum');
+        }
+
         // SDK handles everything: approvals, price fetching, calldata encoding, tx sending
         await sdk.orders.long({
           payAmount: collateralAmount,
@@ -71,7 +85,7 @@ export function useGmxSdk() {
         throw err;
       }
     },
-    [sdk]
+    [sdk, chainId, switchChainAsync]
   );
 
   // Open a short position
@@ -94,9 +108,19 @@ export function useGmxSdk() {
         collateralAmount: collateralAmount.toString(),
         leverage: params.leverage,
         slippageBps: params.slippageBps ?? 100,
+        currentChainId: chainId,
       });
 
       try {
+        // CRITICAL: Ensure we're on Arbitrum before sending the transaction
+        if (chainId !== ARBITRUM_CHAIN_ID) {
+          console.log('[useGmxSdk] Switching to Arbitrum...');
+          await switchChainAsync({ chainId: ARBITRUM_CHAIN_ID });
+          // Small delay to let the chain switch propagate
+          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log('[useGmxSdk] Chain switched to Arbitrum');
+        }
+
         // SDK handles everything: approvals, price fetching, calldata encoding, tx sending
         await sdk.orders.short({
           payAmount: collateralAmount,
@@ -117,7 +141,7 @@ export function useGmxSdk() {
         throw err;
       }
     },
-    [sdk]
+    [sdk, chainId, switchChainAsync]
   );
 
   return {
