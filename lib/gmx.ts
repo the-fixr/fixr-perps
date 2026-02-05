@@ -491,7 +491,7 @@ export const ERC20_ABI = [
   },
 ] as const;
 
-// GMX ExchangeRouter ABI for creating orders
+// GMX ExchangeRouter ABI for creating orders (updated for current V2)
 export const EXCHANGE_ROUTER_ABI = [
   {
     name: 'createOrder',
@@ -507,6 +507,7 @@ export const EXCHANGE_ROUTER_ABI = [
             type: 'tuple',
             components: [
               { name: 'receiver', type: 'address' },
+              { name: 'cancellationReceiver', type: 'address' },
               { name: 'callbackContract', type: 'address' },
               { name: 'uiFeeReceiver', type: 'address' },
               { name: 'market', type: 'address' },
@@ -525,13 +526,16 @@ export const EXCHANGE_ROUTER_ABI = [
               { name: 'executionFee', type: 'uint256' },
               { name: 'callbackGasLimit', type: 'uint256' },
               { name: 'minOutputAmount', type: 'uint256' },
+              { name: 'validFromTime', type: 'uint256' },
             ],
           },
           { name: 'orderType', type: 'uint8' },
           { name: 'decreasePositionSwapType', type: 'uint8' },
           { name: 'isLong', type: 'bool' },
           { name: 'shouldUnwrapNativeToken', type: 'bool' },
+          { name: 'autoCancel', type: 'bool' },
           { name: 'referralCode', type: 'bytes32' },
+          { name: 'dataList', type: 'bytes32[]' },
         ],
       },
     ],
@@ -599,10 +603,11 @@ export function buildCreateOrderCalldata(params: CreateOrderParams): {
   // For shorts: we want to sell at least at this price (lower = more slippage tolerance)
   const acceptablePriceBigInt = parseUnits(params.acceptablePrice.toString(), 30);
 
-  // Order parameters
+  // Order parameters (updated for current GMX V2)
   const orderParams = {
     addresses: {
       receiver: params.account,
+      cancellationReceiver: params.account, // Same as receiver
       callbackContract: '0x0000000000000000000000000000000000000000' as `0x${string}`,
       uiFeeReceiver: '0x0000000000000000000000000000000000000000' as `0x${string}`,
       market: marketInfo.marketToken,
@@ -617,12 +622,15 @@ export function buildCreateOrderCalldata(params: CreateOrderParams): {
       executionFee: EXECUTION_FEE,
       callbackGasLimit: 0n,
       minOutputAmount: 0n,
+      validFromTime: 0n, // Execute immediately
     },
     orderType: ORDER_TYPE.MarketIncrease,
     decreasePositionSwapType: DECREASE_POSITION_SWAP_TYPE.NoSwap,
     isLong: params.isLong,
     shouldUnwrapNativeToken: false,
+    autoCancel: false,
     referralCode: FIXR_REFERRAL_CODE,
+    dataList: [] as `0x${string}`[],
   };
 
   // Build multicall: sendWnt (execution fee) + sendTokens (collateral) + createOrder
