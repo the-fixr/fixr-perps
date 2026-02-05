@@ -6,6 +6,7 @@ import { parseUnits } from 'viem';
 import type { FrameContext } from '../types/frame';
 import {
   GMX_MARKETS,
+  GMX_CONTRACTS,
   type MarketKey,
   type MarketData,
   type Position,
@@ -15,11 +16,16 @@ import {
   formatPrice,
   checkAllowance,
   getUsdcBalance,
+  buildClosePositionCalldata,
+  calculateAcceptablePriceForClose,
 } from '../../lib/gmx';
 import { formatUsd, formatPercent } from '../../lib/arbitrum';
 import { useGmxSdk } from '../../hooks/useGmxSdk';
 
 // ============ Constants ============
+
+// GMX minimum position size (in USD)
+const MIN_COLLATERAL_USD = 10;
 
 // Token logo URLs (CoinGecko CDN)
 const TOKEN_LOGOS: Record<MarketKey, string> = {
@@ -39,6 +45,28 @@ function StatusDot({ connected }: { connected: boolean }) {
         connected ? 'bg-long animate-pulse' : 'bg-short'
       }`}
     />
+  );
+}
+
+// Tooltip component
+function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  const [show, setShow] = useState(false);
+  return (
+    <span className="relative inline-flex items-center">
+      <span
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        onClick={() => setShow(!show)}
+        className="cursor-help"
+      >
+        {children}
+      </span>
+      {show && (
+        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] bg-terminal-tertiary border border-terminal-border rounded text-terminal-text whitespace-nowrap z-50">
+          {text}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -325,8 +353,16 @@ function TradeConfirmModal({
   );
 }
 
-// Position card (compact)
-function PositionCard({ position }: { position: Position }) {
+// Position card (compact) with close button
+function PositionCard({
+  position,
+  onClose,
+  isClosing
+}: {
+  position: Position;
+  onClose: (position: Position) => void;
+  isClosing: boolean;
+}) {
   const isProfit = parseFloat(position.pnl.replace(/[^0-9.-]/g, '')) >= 0;
 
   return (
@@ -378,7 +414,7 @@ function PositionCard({ position }: { position: Position }) {
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-4 gap-1 text-[10px]">
+      <div className="grid grid-cols-4 gap-1 text-[10px] mb-2">
         <div>
           <span className="text-terminal-secondary block">Entry</span>
           <span className="font-mono">${position.entryPrice}</span>
@@ -396,6 +432,18 @@ function PositionCard({ position }: { position: Position }) {
           <span className="font-mono">${position.collateral}</span>
         </div>
       </div>
+      {/* Close Position Button */}
+      <button
+        onClick={() => onClose(position)}
+        disabled={isClosing}
+        className={`w-full py-1.5 text-[11px] font-bold rounded transition-all ${
+          isClosing
+            ? 'bg-terminal-tertiary text-terminal-secondary cursor-not-allowed'
+            : 'bg-short/10 text-short border border-short/30 hover:bg-short/20'
+        }`}
+      >
+        {isClosing ? 'Closing...' : 'Close Position'}
+      </button>
     </div>
   );
 }
@@ -431,7 +479,7 @@ export default function Demo() {
   const [markets, setMarkets] = useState<MarketData[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<MarketKey>('ETH-USD');
   const [isLong, setIsLong] = useState(true);
-  const [collateral, setCollateral] = useState('100');
+  const [collateral, setCollateral] = useState('10');
   const [leverage, setLeverage] = useState(10);
   const [positions, setPositions] = useState<Position[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
@@ -440,6 +488,7 @@ export default function Demo() {
   const [tradeStatus, setTradeStatus] = useState<TradeStatus>('confirm');
   const [tradeError, setTradeError] = useState<string | undefined>();
   const [needsApproval, setNeedsApproval] = useState(false);
+  const [closingPosition, setClosingPosition] = useState<string | null>(null); // market key of position being closed
 
   // Get current market data
   const currentMarket = markets.find((m) => m.market === selectedMarket);
@@ -530,6 +579,12 @@ export default function Demo() {
     if (collateralNum <= 0) {
       console.log('[handleTrade] No collateral');
       setError('Enter collateral amount');
+      return;
+    }
+
+    if (collateralNum < MIN_COLLATERAL_USD) {
+      console.log('[handleTrade] Below minimum collateral');
+      setError(`Minimum $${MIN_COLLATERAL_USD} collateral required`);
       return;
     }
 
@@ -676,6 +731,87 @@ export default function Demo() {
     setTradeError(undefined);
     resetTx();
   }, [resetTx]);
+
+  // Handle close position
+  const handleClosePosition = useCallback(async (position: Position) => {
+    if (!address) {
+      setError('Wallet not connected');
+      return;
+    }
+
+    // Ensure on Arbitrum
+    if (chainId !== 42161) {
+      setError('Please switch to Arbitrum network');
+      try {
+        switchChain({ chainId: 42161 });
+      } catch (e) {
+        console.error('[handleClosePosition] Failed to switch chain:', e);
+      }
+      return;
+    }
+
+    // Parse position values (remove commas)
+    const sizeNum = parseFloat(position.size.replace(/,/g, ''));
+    const collateralNum = parseFloat(position.collateral.replace(/,/g, ''));
+    const markPriceNum = parseFloat(position.markPrice.replace(/,/g, ''));
+
+    console.log('[handleClosePosition] Closing position:', {
+      market: position.market,
+      isLong: position.isLong,
+      size: sizeNum,
+      collateral: collateralNum,
+      markPrice: markPriceNum,
+    });
+
+    // Set closing state
+    const positionKey = `${position.market}-${position.isLong ? 'long' : 'short'}`;
+    setClosingPosition(positionKey);
+    setError(null);
+
+    try {
+      // Calculate acceptable price with 1% slippage for close
+      const acceptablePrice = calculateAcceptablePriceForClose(
+        markPriceNum,
+        position.isLong,
+        1.0 // 1% slippage
+      );
+
+      // Build the close position calldata
+      const { calldata, value } = buildClosePositionCalldata({
+        market: position.market,
+        isLong: position.isLong,
+        sizeDeltaUsd: sizeNum,
+        collateralDeltaUsd: collateralNum,
+        acceptablePrice,
+        account: address,
+      });
+
+      console.log('[handleClosePosition] Sending close tx:', {
+        to: GMX_CONTRACTS.ExchangeRouter,
+        data: calldata.slice(0, 66) + '...',
+        value: value.toString(),
+      });
+
+      // Send the transaction
+      sendTransaction({
+        to: GMX_CONTRACTS.ExchangeRouter,
+        data: calldata,
+        value,
+      });
+
+      // Note: Transaction confirmation handled by useWaitForTransactionReceipt
+      // We'll refresh positions after a delay to allow keeper execution
+      setTimeout(() => {
+        if (address) fetchPositions(address);
+        setClosingPosition(null);
+      }, 5000);
+
+    } catch (err) {
+      console.error('[handleClosePosition] Failed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to close position');
+      setClosingPosition(null);
+    }
+  }, [address, chainId, switchChain, sendTransaction, fetchPositions]);
 
   // Initialize Frame SDK
   useEffect(() => {
@@ -877,9 +1013,17 @@ export default function Demo() {
 
             {/* Collateral Input */}
             <div className="space-y-1">
-              <label className="text-terminal-secondary text-xs">
-                Collateral (USDC)
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-terminal-secondary text-xs">
+                  Collateral (USDC)
+                </label>
+                <Tooltip text="GMX requires minimum $10 collateral for keeper execution">
+                  <span className="text-terminal-secondary text-[10px] flex items-center gap-0.5">
+                    Min: ${MIN_COLLATERAL_USD}
+                    <span className="text-accent-orange">ⓘ</span>
+                  </span>
+                </Tooltip>
+              </div>
               <div className="relative">
                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-terminal-secondary text-sm">
                   $
@@ -888,8 +1032,13 @@ export default function Demo() {
                   type="number"
                   value={collateral}
                   onChange={(e) => setCollateral(e.target.value)}
-                  className="terminal-input w-full pl-5 pr-16 py-1.5 text-sm"
-                  placeholder="100"
+                  className={`terminal-input w-full pl-5 pr-16 py-1.5 text-sm ${
+                    parseFloat(collateral) > 0 && parseFloat(collateral) < MIN_COLLATERAL_USD
+                      ? 'border-short/50 focus:border-short'
+                      : ''
+                  }`}
+                  placeholder="10"
+                  min={MIN_COLLATERAL_USD}
                 />
                 <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-0.5">
                   {['25%', '50%', 'MAX'].map((pct) => (
@@ -902,6 +1051,11 @@ export default function Demo() {
                   ))}
                 </div>
               </div>
+              {parseFloat(collateral) > 0 && parseFloat(collateral) < MIN_COLLATERAL_USD && (
+                <div className="text-short text-[10px]">
+                  Minimum ${MIN_COLLATERAL_USD} required
+                </div>
+              )}
             </div>
 
             {/* Leverage Slider */}
@@ -966,7 +1120,12 @@ export default function Demo() {
             ) : (
               <div className="space-y-1.5">
                 {positions.map((pos, i) => (
-                  <PositionCard key={i} position={pos} />
+                  <PositionCard
+                    key={i}
+                    position={pos}
+                    onClose={handleClosePosition}
+                    isClosing={closingPosition === `${pos.market}-${pos.isLong ? 'long' : 'short'}`}
+                  />
                 ))}
               </div>
             )}
