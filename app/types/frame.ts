@@ -26,12 +26,21 @@ export interface FrameContext {
     request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
   }
 
+  export interface AddMiniAppResult {
+    added: boolean;
+    notificationDetails?: {
+      url: string;
+      token: string;
+    };
+  }
+
   export interface FrameSDK {
     context: Promise<FrameContext>;
     actions: {
       ready: () => void;
       openUrl: (url: string) => void;
       close: () => void;
+      addMiniApp: () => Promise<AddMiniAppResult>;
     };
     wallet: {
       ethProvider: EIP1193Provider;

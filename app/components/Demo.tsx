@@ -812,7 +812,27 @@ export default function Demo() {
         if (mounted) {
           setFrameData(context);
           setError(null);
-          // Wallet connection handled by wagmi auto-connect
+
+          // Prompt user to add app if not already added (enables notifications)
+          if (context && !context.client?.added) {
+            try {
+              console.log('[Frame] Prompting user to add mini app...');
+              const result = await window.frame.sdk.actions.addMiniApp();
+              console.log('[Frame] addMiniApp result:', result);
+
+              if (result.notificationDetails) {
+                console.log('[Frame] Notifications enabled:', {
+                  url: result.notificationDetails.url,
+                  hasToken: !!result.notificationDetails.token,
+                });
+              }
+            } catch (addErr) {
+              // User rejected or other error - not critical, continue
+              console.log('[Frame] addMiniApp declined or failed:', addErr);
+            }
+          } else {
+            console.log('[Frame] App already added by user');
+          }
         }
       } catch (err) {
         console.error('Frame initialization error:', err);
