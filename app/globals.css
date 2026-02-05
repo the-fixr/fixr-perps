@@ -1,0 +1,226 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Terminal Dark Theme */
+  --terminal-bg: #0D1117;
+  --terminal-bg-secondary: #161B22;
+  --terminal-bg-tertiary: #1C2128;
+  --terminal-border: #30363D;
+  --terminal-text: #E6EDF3;
+  --terminal-text-secondary: #8B949E;
+  --terminal-text-muted: #484F58;
+
+  /* Trading Colors */
+  --long-green: #00FF88;
+  --long-green-dim: #00CC6A;
+  --long-green-bg: rgba(0, 255, 136, 0.1);
+  --short-red: #FF3366;
+  --short-red-dim: #CC2952;
+  --short-red-bg: rgba(255, 51, 102, 0.1);
+
+  /* Accent Colors */
+  --accent-blue: #58A6FF;
+  --accent-purple: #A371F7;
+  --accent-orange: #F0883E;
+  --accent-cyan: #39D9F0;
+
+  /* GMX Brand */
+  --gmx-blue: #2D42FC;
+  --arbitrum-blue: #12AAFF;
+}
+
+/* Base Styles */
+body {
+  color: var(--terminal-text);
+  background: var(--terminal-bg);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--terminal-bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--terminal-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--terminal-text-muted);
+}
+
+/* Terminal Panel */
+@layer components {
+  .terminal-panel {
+    @apply bg-terminal-secondary border border-terminal-border rounded-lg;
+  }
+
+  .terminal-header {
+    @apply px-4 py-3 border-b border-terminal-border flex items-center justify-between;
+  }
+
+  .terminal-body {
+    @apply p-4;
+  }
+
+  /* Price Display */
+  .price-display {
+    @apply font-mono text-2xl font-bold tracking-tight;
+  }
+
+  .price-change-positive {
+    @apply text-long;
+  }
+
+  .price-change-negative {
+    @apply text-short;
+  }
+
+  /* Trading Buttons */
+  .btn-long {
+    @apply bg-long/20 text-long border border-long/30 hover:bg-long/30 transition-all font-semibold;
+  }
+
+  .btn-short {
+    @apply bg-short/20 text-short border border-short/30 hover:bg-short/30 transition-all font-semibold;
+  }
+
+  .btn-primary {
+    @apply bg-accent-blue/20 text-accent-blue border border-accent-blue/30 hover:bg-accent-blue/30 transition-all font-semibold;
+  }
+
+  /* Data Grid */
+  .data-row {
+    @apply flex justify-between items-center py-2 border-b border-terminal-border/50 last:border-0;
+  }
+
+  .data-label {
+    @apply text-sm text-terminal-secondary;
+  }
+
+  .data-value {
+    @apply font-mono text-sm text-terminal-text;
+  }
+
+  /* Input Styling */
+  .terminal-input {
+    @apply bg-terminal-bg border border-terminal-border rounded px-3 py-2 text-terminal-text font-mono focus:outline-none focus:border-accent-blue transition-colors;
+  }
+
+  /* Leverage Slider Track */
+  .leverage-track {
+    @apply h-1 bg-terminal-border rounded-full relative;
+  }
+
+  .leverage-fill {
+    @apply h-full rounded-full transition-all;
+  }
+
+  /* Position Card */
+  .position-card {
+    @apply terminal-panel p-4 space-y-3;
+  }
+
+  .position-long {
+    @apply border-l-2 border-l-long;
+  }
+
+  .position-short {
+    @apply border-l-2 border-l-short;
+  }
+
+  /* Status Indicators */
+  .status-dot {
+    @apply w-2 h-2 rounded-full animate-pulse;
+  }
+
+  .status-connected {
+    @apply bg-long;
+  }
+
+  .status-disconnected {
+    @apply bg-short;
+  }
+
+  /* Ticker Tape Animation */
+  @keyframes ticker {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  .ticker-tape {
+    animation: ticker 30s linear infinite;
+  }
+
+  /* Glow Effects */
+  .glow-long {
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+  }
+
+  .glow-short {
+    box-shadow: 0 0 20px rgba(255, 51, 102, 0.3);
+  }
+
+  /* Grid Pattern Background */
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(48, 54, 61, 0.3) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(48, 54, 61, 0.3) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  /* FIXR Repeating Pattern Background */
+  .fixr-pattern-bg {
+    position: relative;
+  }
+
+  .fixr-pattern-bg::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='60' viewBox='0 0 120 60'%3E%3Ctext x='10' y='35' font-family='system-ui, sans-serif' font-size='16' font-weight='700' fill='%238B5CF6' fill-opacity='0.06'%3EFIXR%3C/text%3E%3C/svg%3E");
+    background-repeat: repeat;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .fixr-pattern-bg > * {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Number formatting */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

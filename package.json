@@ -1,0 +1,35 @@
+{
+  "name": "gmxlite",
+  "version": "1.0.0",
+  "description": "Simplified GMX perpetual trading on Arbitrum - a trading terminal for Farcaster",
+  "private": true,
+  "keywords": ["farcaster", "frame", "mini-app", "gmx", "arbitrum", "trading", "perps"],
+  "author": "Fixr",
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.62.7",
+    "next": "15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "viem": "^2.21.0",
+    "wagmi": "^2.12.0",
+    "@wagmi/core": "^2.13.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.1.0",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}
