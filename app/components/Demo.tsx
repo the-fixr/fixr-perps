@@ -24,8 +24,9 @@ import { useGmxSdk } from '../../hooks/useGmxSdk';
 
 // ============ Constants ============
 
-// GMX minimum position size (in USD)
-const MIN_COLLATERAL_USD = 10;
+// GMX minimum collateral (in USD)
+// GMX on-chain MIN_COLLATERAL_USD = $1, MIN_POSITION_SIZE_USD = $1
+const MIN_COLLATERAL_USD = 1;
 
 // Token logo URLs (CoinGecko CDN)
 const TOKEN_LOGOS: Record<MarketKey, string> = {
@@ -1017,7 +1018,7 @@ export default function Demo() {
                 <label className="text-terminal-secondary text-xs">
                   Collateral (USDC)
                 </label>
-                <Tooltip text="GMX requires minimum $10 collateral for keeper execution">
+                <Tooltip text="GMX minimum is $1 collateral / $1 position size">
                   <span className="text-terminal-secondary text-[10px] flex items-center gap-0.5">
                     Min: ${MIN_COLLATERAL_USD}
                     <span className="text-accent-orange">ⓘ</span>
@@ -1037,7 +1038,7 @@ export default function Demo() {
                       ? 'border-short/50 focus:border-short'
                       : ''
                   }`}
-                  placeholder="10"
+                  placeholder="1"
                   min={MIN_COLLATERAL_USD}
                 />
                 <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-0.5">
