@@ -1,4 +1,4 @@
-import { formatUnits } from 'viem';
+import { formatUnits, getAddress } from 'viem';
 import { publicClient, TOKENS } from './arbitrum';
 
 // GMX V2 Contract Addresses on Arbitrum
@@ -10,13 +10,13 @@ export const GMX_CONTRACTS = {
   OrderVault: '0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5' as const,
 } as const;
 
-// Chainlink Price Feed addresses on Arbitrum
-const CHAINLINK_FEEDS = {
-  'ETH-USD': '0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612' as const,
-  'BTC-USD': '0x6ce185860a4963106506C203335A2910C7e99934' as const,
-  'ARB-USD': '0xb2A824043730FE05F3DA2efaFa1CBbe83fa548D6' as const,
-  'LINK-USD': '0x86E53CF1B870786351Da77A57575e79CB55812CB' as const,
-} as const;
+// Chainlink Price Feed addresses on Arbitrum (use getAddress for proper checksumming)
+const CHAINLINK_FEEDS: Record<string, `0x${string}`> = {
+  'ETH-USD': getAddress('0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612'),
+  'BTC-USD': getAddress('0x6ce185860a4963106506c203335a2910c7e99934'), // BTC/USD on Arbitrum
+  'ARB-USD': getAddress('0xb2A824043730FE05F3DA2efaFa1CBbe83fa548D6'),
+  'LINK-USD': getAddress('0x86E53CF1B870786351Da77A57575e79CB55812CB'),
+};
 
 // GMX Market tokens (GM tokens)
 export const GMX_MARKETS = {
@@ -120,43 +120,34 @@ let priceCache: {
 
 const CACHE_DURATION = 60_000; // 1 minute cache for 24h data
 
-// Fetch 24h market data from CoinGecko
+// Fetch 24h market data via our API route (avoids CORS issues)
 async function fetch24hData(): Promise<Record<string, { price: number; change24h: number; high24h: number; low24h: number; volume24h: number }>> {
   // Check cache
   if (priceCache && Date.now() - priceCache.timestamp < CACHE_DURATION) {
     return priceCache.data;
   }
 
-  const ids = Object.values(GMX_MARKETS).map(m => m.coingeckoId).join(',');
-
   try {
-    const response = await fetch(
-      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&sparkline=false&price_change_percentage=24h`
-    );
+    // Use our API route to avoid CORS issues with CoinGecko
+    const response = await fetch('/api/markets');
 
     if (!response.ok) {
-      throw new Error(`CoinGecko API error: ${response.status}`);
+      throw new Error(`Market API error: ${response.status}`);
     }
 
-    const data = await response.json();
-    const result: Record<string, { price: number; change24h: number; high24h: number; low24h: number; volume24h: number }> = {};
+    const { data } = await response.json();
 
-    for (const coin of data) {
-      result[coin.id] = {
-        price: coin.current_price,
-        change24h: coin.price_change_percentage_24h || 0,
-        high24h: coin.high_24h,
-        low24h: coin.low_24h,
-        volume24h: coin.total_volume,
-      };
+    if (data && Object.keys(data).length > 0) {
+      // Update cache
+      priceCache = { data, timestamp: Date.now() };
+      return data;
     }
 
-    // Update cache
-    priceCache = { data: result, timestamp: Date.now() };
-    return result;
+    // Return cached data if API returned empty
+    return priceCache?.data || {};
   } catch (error) {
-    console.error('Failed to fetch CoinGecko data:', error);
-    // Return empty if cache miss and fetch fails
+    console.error('Failed to fetch market data:', error);
+    // Return cached data or empty if cache miss and fetch fails
     return priceCache?.data || {};
   }
 }
