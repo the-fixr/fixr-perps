@@ -30,14 +30,14 @@ const inter = Inter({
 const frameMetadata = {
   version: 'next',
   // TODO: Replace with deployed URL
-  imageUrl: 'https://perps.fixr.nexus/images/frame-preview.png',
+  imageUrl: 'https://perps.fixr.nexus/frame-preview.png',
   button: {
     title: 'Trade Perps on Arb',
     action: {
       type: 'launch_frame',
       name: 'Fixr Perps',
       url: 'https://perps.fixr.nexus',
-      splashImageUrl: 'https://perps.fixr.nexus/images/splash.png',
+      splashImageUrl: 'https://perps.fixr.nexus/splash.png',
       splashBackgroundColor: '#0D1117'
     }
   }
