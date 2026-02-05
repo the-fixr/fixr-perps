@@ -624,6 +624,7 @@ export default function Demo() {
       to: GMX_CONTRACTS.ExchangeRouter,
       data: calldata,
       value,
+      chainId: 42161, // Force Arbitrum
     });
   }, [pendingTrade, address, sendTransaction]);
 
@@ -645,6 +646,7 @@ export default function Demo() {
         sendTransaction({
           to: TOKENS.USDC,
           data: approveData,
+          chainId: 42161, // Force Arbitrum
         });
 
         // Wait for approval to be sent, then continue to order
