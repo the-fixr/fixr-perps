@@ -10,10 +10,11 @@ export const GMX_SDK_CONFIG = {
   oracleUrl: 'https://arbitrum-api.gmxinfra.io',
   rpcUrl: 'https://arb1.arbitrum.io/rpc',
   subsquidUrl: 'https://gmx.squids.live/gmx-synthetics-arbitrum:prod/api/graphql',
-  settings: {
-    // UI fee receiver - Fixr receives GMX's UI fee share on all trades
-    uiFeeReceiverAccount: FIXR_FEE_RECEIVER,
-  },
+  // NOTE: UI fee receiver disabled until registered with GMX protocol
+  // To enable, register FIXR_FEE_RECEIVER with GMX's UI fee system first
+  // settings: {
+  //   uiFeeReceiverAccount: FIXR_FEE_RECEIVER,
+  // },
 };
 
 // GMX Market addresses on Arbitrum

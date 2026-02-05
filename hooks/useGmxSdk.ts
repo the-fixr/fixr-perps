@@ -47,20 +47,29 @@ export function useGmxSdk() {
         collateralUsd: params.collateralUsd,
         collateralAmount: collateralAmount.toString(),
         leverage: params.leverage,
-        slippageBps: params.slippageBps ?? 50,
+        slippageBps: params.slippageBps ?? 100,
       });
 
-      // SDK handles everything: approvals, price fetching, calldata encoding, tx sending
-      await sdk.orders.long({
-        payAmount: collateralAmount,
-        marketAddress,
-        payTokenAddress: USDC_ADDRESS,
-        collateralTokenAddress: USDC_ADDRESS,
-        allowedSlippageBps: params.slippageBps ?? 50, // 0.5% default
-        leverage: params.leverage ? BigInt(params.leverage) : undefined,
-      });
-
-      console.log('[useGmxSdk] Long order submitted successfully');
+      try {
+        // SDK handles everything: approvals, price fetching, calldata encoding, tx sending
+        await sdk.orders.long({
+          payAmount: collateralAmount,
+          marketAddress,
+          payTokenAddress: USDC_ADDRESS,
+          collateralTokenAddress: USDC_ADDRESS,
+          allowedSlippageBps: params.slippageBps ?? 100, // 1% default slippage
+          leverage: params.leverage ? BigInt(params.leverage) : undefined,
+          skipSimulation: true, // Skip simulation - can cause false failures
+        });
+        console.log('[useGmxSdk] Long order submitted successfully');
+      } catch (err: unknown) {
+        console.error('[useGmxSdk] Long order FAILED:', err);
+        if (err instanceof Error) {
+          console.error('[useGmxSdk] Error message:', err.message);
+          console.error('[useGmxSdk] Error stack:', err.stack);
+        }
+        throw err;
+      }
     },
     [sdk]
   );
@@ -84,20 +93,29 @@ export function useGmxSdk() {
         collateralUsd: params.collateralUsd,
         collateralAmount: collateralAmount.toString(),
         leverage: params.leverage,
-        slippageBps: params.slippageBps ?? 50,
+        slippageBps: params.slippageBps ?? 100,
       });
 
-      // SDK handles everything: approvals, price fetching, calldata encoding, tx sending
-      await sdk.orders.short({
-        payAmount: collateralAmount,
-        marketAddress,
-        payTokenAddress: USDC_ADDRESS,
-        collateralTokenAddress: USDC_ADDRESS,
-        allowedSlippageBps: params.slippageBps ?? 50,
-        leverage: params.leverage ? BigInt(params.leverage) : undefined,
-      });
-
-      console.log('[useGmxSdk] Short order submitted successfully');
+      try {
+        // SDK handles everything: approvals, price fetching, calldata encoding, tx sending
+        await sdk.orders.short({
+          payAmount: collateralAmount,
+          marketAddress,
+          payTokenAddress: USDC_ADDRESS,
+          collateralTokenAddress: USDC_ADDRESS,
+          allowedSlippageBps: params.slippageBps ?? 100, // 1% default slippage
+          leverage: params.leverage ? BigInt(params.leverage) : undefined,
+          skipSimulation: true, // Skip simulation - can cause false failures
+        });
+        console.log('[useGmxSdk] Short order submitted successfully');
+      } catch (err: unknown) {
+        console.error('[useGmxSdk] Short order FAILED:', err);
+        if (err instanceof Error) {
+          console.error('[useGmxSdk] Error message:', err.message);
+          console.error('[useGmxSdk] Error stack:', err.stack);
+        }
+        throw err;
+      }
     },
     [sdk]
   );
