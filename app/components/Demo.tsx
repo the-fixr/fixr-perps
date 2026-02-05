@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useAccount, useConnect, useSendTransaction } from 'wagmi';
+import { useAccount, useConnect } from 'wagmi';
 import type { FrameContext } from '../types/frame';
 import {
   GMX_MARKETS,
@@ -257,8 +257,7 @@ export default function Demo() {
 
   // Wagmi hooks - auto-connect in mini app
   const { address, isConnected } = useAccount();
-  const { connect, connectors } = useConnect();
-  const { sendTransaction, isPending: isTxPending } = useSendTransaction();
+  const { connect, connectors, isPending: isConnecting } = useConnect();
 
   // Trading state
   const [markets, setMarkets] = useState<MarketData[]>([]);
@@ -631,11 +630,11 @@ export default function Demo() {
                 isLong
                   ? 'bg-long/20 text-long border border-long/50 hover:bg-long/30'
                   : 'bg-short/20 text-short border border-short/50 hover:bg-short/30'
-              } ${isTxPending ? 'opacity-50 cursor-not-allowed' : ''}`}
+              } ${isConnecting ? 'opacity-50 cursor-not-allowed' : ''}`}
               onClick={handleTrade}
-              disabled={isTxPending || !parseFloat(collateral)}
+              disabled={isConnecting || !parseFloat(collateral)}
             >
-              {isTxPending ? 'Processing...' : isConnected ? (isLong ? 'Open Long' : 'Open Short') : 'Connect Wallet'}
+              {isConnecting ? 'Processing...' : isConnected ? (isLong ? 'Open Long' : 'Open Short') : 'Connect Wallet'}
             </button>
           </div>
         </div>
