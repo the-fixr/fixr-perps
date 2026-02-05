@@ -1,13 +1,38 @@
 'use client';
 
 import { useMemo, useCallback } from 'react';
-import { useWalletClient, useAccount, useSwitchChain, useChainId } from 'wagmi';
-import { parseUnits } from 'viem';
+import { useWalletClient, useAccount, useSwitchChain, useChainId, usePublicClient } from 'wagmi';
+import { parseUnits, encodeFunctionData } from 'viem';
 import { GmxSdk } from '@gmx-io/sdk';
 import { GMX_SDK_CONFIG, GMX_MARKET_ADDRESSES, USDC_ADDRESS } from '@/lib/gmx-sdk';
+import { GMX_CONTRACTS } from '@/lib/gmx';
 import type { MarketKey } from '@/lib/gmx';
 
 const ARBITRUM_CHAIN_ID = 42161;
+
+// ERC20 ABI for approvals
+const ERC20_ABI = [
+  {
+    name: 'approve',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    name: 'allowance',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const;
 
 // Create SDK instance from wagmi wallet client
 export function useGmxSdk() {
@@ -15,6 +40,7 @@ export function useGmxSdk() {
   const { address } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   const chainId = useChainId();
+  const publicClient = usePublicClient();
 
   const sdk = useMemo(() => {
     if (!walletClient || !address) return null;
@@ -31,6 +57,44 @@ export function useGmxSdk() {
       return null;
     }
   }, [walletClient, address]);
+
+  // Check and approve exact amount for Router
+  const ensureApproval = useCallback(
+    async (amount: bigint) => {
+      if (!walletClient || !address || !publicClient) {
+        throw new Error('Wallet not connected');
+      }
+
+      // Check current allowance for GMX Router
+      const currentAllowance = await publicClient.readContract({
+        address: USDC_ADDRESS as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'allowance',
+        args: [address, GMX_CONTRACTS.Router],
+      });
+
+      console.log('[useGmxSdk] Current allowance:', currentAllowance.toString(), 'needed:', amount.toString());
+
+      // If allowance is insufficient, approve exact amount
+      if (currentAllowance < amount) {
+        console.log('[useGmxSdk] Approving exact amount:', amount.toString());
+
+        const hash = await walletClient.writeContract({
+          address: USDC_ADDRESS as `0x${string}`,
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [GMX_CONTRACTS.Router, amount],
+        });
+
+        console.log('[useGmxSdk] Approval tx:', hash);
+
+        // Wait for approval confirmation
+        await publicClient.waitForTransactionReceipt({ hash });
+        console.log('[useGmxSdk] Approval confirmed');
+      }
+    },
+    [walletClient, address, publicClient]
+  );
 
   // Open a long position
   const openLong = useCallback(
@@ -65,7 +129,10 @@ export function useGmxSdk() {
           console.log('[useGmxSdk] Chain switched to Arbitrum');
         }
 
-        // SDK handles everything: approvals, price fetching, calldata encoding, tx sending
+        // Ensure exact approval before trade
+        await ensureApproval(collateralAmount);
+
+        // SDK handles price fetching, calldata encoding, tx sending
         await sdk.orders.long({
           payAmount: collateralAmount,
           marketAddress,
@@ -85,7 +152,7 @@ export function useGmxSdk() {
         throw err;
       }
     },
-    [sdk, chainId, switchChainAsync]
+    [sdk, chainId, switchChainAsync, ensureApproval]
   );
 
   // Open a short position
@@ -121,7 +188,10 @@ export function useGmxSdk() {
           console.log('[useGmxSdk] Chain switched to Arbitrum');
         }
 
-        // SDK handles everything: approvals, price fetching, calldata encoding, tx sending
+        // Ensure exact approval before trade
+        await ensureApproval(collateralAmount);
+
+        // SDK handles price fetching, calldata encoding, tx sending
         await sdk.orders.short({
           payAmount: collateralAmount,
           marketAddress,
@@ -141,7 +211,7 @@ export function useGmxSdk() {
         throw err;
       }
     },
-    [sdk, chainId, switchChainAsync]
+    [sdk, chainId, switchChainAsync, ensureApproval]
   );
 
   return {
