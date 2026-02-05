@@ -5,7 +5,6 @@ import { useAccount, useConnect, useSendTransaction, useWaitForTransactionReceip
 import { parseUnits } from 'viem';
 import type { FrameContext } from '../types/frame';
 import {
-  GMX_CONTRACTS,
   GMX_MARKETS,
   type MarketKey,
   type MarketData,
@@ -14,13 +13,10 @@ import {
   getPositions,
   calculateTradePreview,
   formatPrice,
-  buildCreateOrderCalldata,
-  buildApproveCalldata,
   checkAllowance,
   getUsdcBalance,
-  calculateAcceptablePrice,
 } from '../../lib/gmx';
-import { formatUsd, formatPercent, TOKENS } from '../../lib/arbitrum';
+import { formatUsd, formatPercent } from '../../lib/arbitrum';
 import { useGmxSdk } from '../../hooks/useGmxSdk';
 
 // ============ Constants ============
@@ -193,6 +189,7 @@ interface TradeInfo {
   size: string;
   sizeNum: number;
   leverage: string;
+  leverageNum: number;
   entryPrice: string;
   entryPriceNum: number;
   liqPrice: string;
@@ -416,6 +413,7 @@ export default function Demo() {
   const { switchChain } = useSwitchChain();
 
   // Transaction hooks
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { sendTransaction, data: txHash, reset: resetTx, error: txError } = useSendTransaction();
   const { isSuccess: isTxSuccess } = useWaitForTransactionReceipt({ hash: txHash });
 
@@ -572,6 +570,7 @@ export default function Demo() {
       size: formatUsd(preview.size),
       sizeNum: preview.size,
       leverage: `${leverage}x`,
+      leverageNum: leverage,
       entryPrice: formatPrice(selectedMarket, preview.entryPrice),
       entryPriceNum: preview.entryPrice,
       liqPrice: formatPrice(selectedMarket, preview.liquidationPrice),

@@ -73,35 +73,6 @@ export async function openShortPosition(
   });
 }
 
-// Close position using SDK
-export async function closePosition(
-  sdk: GmxSdk,
-  params: {
-    marketAddress: string;
-    isLong: boolean;
-    sizeDeltaUsd: bigint; // position size to close (30 decimals)
-    allowedSlippageBps?: number;
-  }
-): Promise<void> {
-  console.log('[SDK] Closing position:', params);
-
-  // The SDK handles decrease orders through the orders module
-  // For a full close, we pass the entire sizeDeltaUsd
-  if (params.isLong) {
-    // Close long = create decrease order
-    await sdk.orders.createDecreaseOrder({
-      marketAddress: params.marketAddress,
-      isLong: true,
-      sizeDeltaUsd: params.sizeDeltaUsd,
-      allowedSlippageBps: params.allowedSlippageBps ?? 50,
-    });
-  } else {
-    // Close short = create decrease order
-    await sdk.orders.createDecreaseOrder({
-      marketAddress: params.marketAddress,
-      isLong: false,
-      sizeDeltaUsd: params.sizeDeltaUsd,
-      allowedSlippageBps: params.allowedSlippageBps ?? 50,
-    });
-  }
-}
+// TODO: Close position functionality
+// The SDK's createDecreaseOrder requires full market/token data
+// This will be implemented once we add position tracking with full state

@@ -3,7 +3,15 @@
   "version": "1.0.0",
   "description": "Simplified GMX perpetual trading on Arbitrum - a trading terminal for Farcaster",
   "private": true,
-  "keywords": ["farcaster", "frame", "mini-app", "gmx", "arbitrum", "trading", "perps"],
+  "keywords": [
+    "farcaster",
+    "frame",
+    "mini-app",
+    "gmx",
+    "arbitrum",
+    "trading",
+    "perps"
+  ],
   "author": "Fixr",
   "license": "MIT",
   "scripts": {
@@ -15,13 +23,14 @@
   "dependencies": {
     "@farcaster/frame-sdk": "^0.0.26",
     "@farcaster/miniapp-wagmi-connector": "^1.1.0",
+    "@gmx-io/sdk": "^1.5.0-alpha-2",
     "@tanstack/react-query": "^5.62.7",
+    "@wagmi/core": "^2.13.0",
     "next": "15.2.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "viem": "^2.21.0",
-    "wagmi": "^2.12.0",
-    "@wagmi/core": "^2.13.0"
+    "wagmi": "^2.12.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
