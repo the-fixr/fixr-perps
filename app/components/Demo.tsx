@@ -21,6 +21,7 @@ import {
   calculateAcceptablePrice,
 } from '../../lib/gmx';
 import { formatUsd, formatPercent, TOKENS } from '../../lib/arbitrum';
+import { useGmxSdk } from '../../hooks/useGmxSdk';
 
 // ============ Constants ============
 
@@ -418,6 +419,9 @@ export default function Demo() {
   const { sendTransaction, data: txHash, reset: resetTx, error: txError } = useSendTransaction();
   const { isSuccess: isTxSuccess } = useWaitForTransactionReceipt({ hash: txHash });
 
+  // GMX SDK hook - handles order creation with proper encoding
+  const { isReady: sdkReady, openLong: sdkOpenLong, openShort: sdkOpenShort } = useGmxSdk();
+
   // Log transaction errors
   useEffect(() => {
     if (txError) {
@@ -584,85 +588,69 @@ export default function Demo() {
     setShowConfirmModal(true);
   }, [isConnected, address, chainId, preview, selectedMarket, isLong, leverage, collateral, connect, connectors, resetTx, switchChain]);
 
-  // Submit order to GMX
+  // Submit order to GMX using SDK
   const submitOrder = useCallback(async () => {
     if (!pendingTrade || !address) return;
 
-    console.log('[submitOrder] Starting order submission');
+    console.log('[submitOrder] Starting order submission via SDK');
     setTradeStatus('submitting');
 
-    const acceptablePrice = calculateAcceptablePrice(
-      pendingTrade.entryPriceNum,
-      pendingTrade.direction === 'LONG',
-      0.5 // 0.5% slippage
-    );
-
-    console.log('[submitOrder] Building order calldata', {
-      market: pendingTrade.marketKey,
-      isLong: pendingTrade.direction === 'LONG',
-      collateralAmount: pendingTrade.collateralAmount,
-      sizeDeltaUsd: pendingTrade.sizeNum,
-      acceptablePrice,
-    });
-
-    const { calldata, value } = buildCreateOrderCalldata({
-      market: pendingTrade.marketKey,
-      isLong: pendingTrade.direction === 'LONG',
-      collateralAmount: pendingTrade.collateralAmount,
-      sizeDeltaUsd: pendingTrade.sizeNum,
-      acceptablePrice,
-      account: address,
-    });
-
-    console.log('[submitOrder] Sending transaction', {
-      to: GMX_CONTRACTS.ExchangeRouter,
-      value: value.toString(),
-      calldataLength: calldata.length,
-    });
-
-    sendTransaction({
-      to: GMX_CONTRACTS.ExchangeRouter,
-      data: calldata,
-      value,
-      chainId: 42161, // Force Arbitrum
-    });
-  }, [pendingTrade, address, sendTransaction]);
-
-  // Handle trade confirmation from modal - executes real trade
-  const handleConfirmTrade = useCallback(async () => {
-    console.log('[handleConfirmTrade] Called', { pendingTrade, address, needsApproval });
-    if (!pendingTrade || !address) return;
-
     try {
-      const collateralBigInt = parseUnits(pendingTrade.collateralAmount.toString(), 6);
+      const isLongOrder = pendingTrade.direction === 'LONG';
 
-      // Step 1: Approve if needed
-      if (needsApproval) {
-        console.log('[handleConfirmTrade] Sending approval for', collateralBigInt.toString());
-        setTradeStatus('approving');
+      console.log('[submitOrder] Using GMX SDK:', {
+        market: pendingTrade.marketKey,
+        isLong: isLongOrder,
+        collateralUsd: pendingTrade.collateralAmount,
+        leverage: pendingTrade.leverageNum,
+        sdkReady,
+      });
 
-        const approveData = buildApproveCalldata(collateralBigInt * 10n); // Approve 10x for future trades
-
-        sendTransaction({
-          to: TOKENS.USDC,
-          data: approveData,
-          chainId: 42161, // Force Arbitrum
+      // Use SDK - it handles approvals, price fetching, and calldata encoding
+      if (isLongOrder) {
+        await sdkOpenLong({
+          market: pendingTrade.marketKey,
+          collateralUsd: pendingTrade.collateralAmount,
+          leverage: pendingTrade.leverageNum,
+          slippageBps: 50, // 0.5%
         });
-
-        // Wait for approval to be sent, then continue to order
-        // The useEffect below will handle moving to order submission
-        return;
+      } else {
+        await sdkOpenShort({
+          market: pendingTrade.marketKey,
+          collateralUsd: pendingTrade.collateralAmount,
+          leverage: pendingTrade.leverageNum,
+          slippageBps: 50,
+        });
       }
 
-      // Step 2: Submit order to GMX
-      console.log('[handleConfirmTrade] No approval needed, submitting order directly');
-      await submitOrder();
+      console.log('[submitOrder] SDK order submitted successfully');
+      setTradeStatus('success');
+
+      // Refresh positions after a delay (keeper needs to execute)
+      if (address) {
+        setTimeout(() => fetchPositions(address), 3000);
+      }
     } catch (err) {
-      console.error('[handleConfirmTrade] Trade failed:', err);
+      console.error('[submitOrder] SDK order failed:', err);
       setTradeStatus('error');
-      setTradeError(err instanceof Error ? err.message : 'Transaction failed');
+      setTradeError(err instanceof Error ? err.message : 'Order submission failed');
     }
-  }, [pendingTrade, address, needsApproval, sendTransaction, submitOrder]);
+  }, [pendingTrade, address, sdkReady, sdkOpenLong, sdkOpenShort, fetchPositions]);
+
+  // Handle trade confirmation from modal - executes real trade via SDK
+  const handleConfirmTrade = useCallback(async () => {
+    console.log('[handleConfirmTrade] Called', { pendingTrade, address, sdkReady });
+    if (!pendingTrade || !address) return;
+
+    if (!sdkReady) {
+      console.error('[handleConfirmTrade] SDK not ready');
+      setTradeError('Wallet not connected properly. Please reconnect.');
+      return;
+    }
+
+    // SDK handles approvals internally - just submit the order
+    await submitOrder();
+  }, [pendingTrade, address, sdkReady, submitOrder]);
 
   // Watch for transaction success and move to next step
   useEffect(() => {
