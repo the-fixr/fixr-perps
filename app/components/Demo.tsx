@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useAccount, useConnect, useSendTransaction, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, useConnect, useSendTransaction, useWaitForTransactionReceipt, useChainId, useSwitchChain } from 'wagmi';
 import { parseUnits } from 'viem';
 import type { FrameContext } from '../types/frame';
 import {
@@ -411,10 +411,19 @@ export default function Demo() {
   // Wagmi hooks - auto-connect in mini app
   const { address, isConnected } = useAccount();
   const { connect, connectors, isPending: isConnecting } = useConnect();
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
 
   // Transaction hooks
-  const { sendTransaction, data: txHash, reset: resetTx } = useSendTransaction();
+  const { sendTransaction, data: txHash, reset: resetTx, error: txError } = useSendTransaction();
   const { isSuccess: isTxSuccess } = useWaitForTransactionReceipt({ hash: txHash });
+
+  // Log transaction errors
+  useEffect(() => {
+    if (txError) {
+      console.error('[Transaction Error]', txError);
+    }
+  }, [txError]);
 
   // Trading state
   const [markets, setMarkets] = useState<MarketData[]>([]);
@@ -486,13 +495,25 @@ export default function Demo() {
 
   // Handle trade submission - opens confirmation modal
   const handleTrade = useCallback(async () => {
-    console.log('[handleTrade] Called', { isConnected, address, preview, collateral });
+    console.log('[handleTrade] Called', { isConnected, address, chainId, preview, collateral });
 
     if (!isConnected || !address) {
       console.log('[handleTrade] Not connected, attempting connect');
       // Try to connect
       if (connectors.length > 0) {
         connect({ connector: connectors[0] });
+      }
+      return;
+    }
+
+    // Check chain - must be on Arbitrum (42161)
+    if (chainId !== 42161) {
+      console.log('[handleTrade] Wrong chain:', chainId, 'switching to Arbitrum');
+      setError('Please switch to Arbitrum network');
+      try {
+        switchChain({ chainId: 42161 });
+      } catch (e) {
+        console.error('[handleTrade] Failed to switch chain:', e);
       }
       return;
     }
@@ -561,10 +582,54 @@ export default function Demo() {
     resetTx();
     setPendingTrade(tradeInfo);
     setShowConfirmModal(true);
-  }, [isConnected, address, preview, selectedMarket, isLong, leverage, collateral, connect, connectors, resetTx]);
+  }, [isConnected, address, chainId, preview, selectedMarket, isLong, leverage, collateral, connect, connectors, resetTx, switchChain]);
+
+  // Submit order to GMX
+  const submitOrder = useCallback(async () => {
+    if (!pendingTrade || !address) return;
+
+    console.log('[submitOrder] Starting order submission');
+    setTradeStatus('submitting');
+
+    const acceptablePrice = calculateAcceptablePrice(
+      pendingTrade.entryPriceNum,
+      pendingTrade.direction === 'LONG',
+      0.5 // 0.5% slippage
+    );
+
+    console.log('[submitOrder] Building order calldata', {
+      market: pendingTrade.marketKey,
+      isLong: pendingTrade.direction === 'LONG',
+      collateralAmount: pendingTrade.collateralAmount,
+      sizeDeltaUsd: pendingTrade.sizeNum,
+      acceptablePrice,
+    });
+
+    const { calldata, value } = buildCreateOrderCalldata({
+      market: pendingTrade.marketKey,
+      isLong: pendingTrade.direction === 'LONG',
+      collateralAmount: pendingTrade.collateralAmount,
+      sizeDeltaUsd: pendingTrade.sizeNum,
+      acceptablePrice,
+      account: address,
+    });
+
+    console.log('[submitOrder] Sending transaction', {
+      to: GMX_CONTRACTS.ExchangeRouter,
+      value: value.toString(),
+      calldataLength: calldata.length,
+    });
+
+    sendTransaction({
+      to: GMX_CONTRACTS.ExchangeRouter,
+      data: calldata,
+      value,
+    });
+  }, [pendingTrade, address, sendTransaction]);
 
   // Handle trade confirmation from modal - executes real trade
   const handleConfirmTrade = useCallback(async () => {
+    console.log('[handleConfirmTrade] Called', { pendingTrade, address, needsApproval });
     if (!pendingTrade || !address) return;
 
     try {
@@ -572,6 +637,7 @@ export default function Demo() {
 
       // Step 1: Approve if needed
       if (needsApproval) {
+        console.log('[handleConfirmTrade] Sending approval for', collateralBigInt.toString());
         setTradeStatus('approving');
 
         const approveData = buildApproveCalldata(collateralBigInt * 10n); // Approve 10x for future trades
@@ -587,41 +653,14 @@ export default function Demo() {
       }
 
       // Step 2: Submit order to GMX
+      console.log('[handleConfirmTrade] No approval needed, submitting order directly');
       await submitOrder();
     } catch (err) {
-      console.error('Trade failed:', err);
+      console.error('[handleConfirmTrade] Trade failed:', err);
       setTradeStatus('error');
       setTradeError(err instanceof Error ? err.message : 'Transaction failed');
     }
-  }, [pendingTrade, address, needsApproval, sendTransaction]);
-
-  // Submit order to GMX
-  const submitOrder = useCallback(async () => {
-    if (!pendingTrade || !address) return;
-
-    setTradeStatus('submitting');
-
-    const acceptablePrice = calculateAcceptablePrice(
-      pendingTrade.entryPriceNum,
-      pendingTrade.direction === 'LONG',
-      0.5 // 0.5% slippage
-    );
-
-    const { calldata, value } = buildCreateOrderCalldata({
-      market: pendingTrade.marketKey,
-      isLong: pendingTrade.direction === 'LONG',
-      collateralAmount: pendingTrade.collateralAmount,
-      sizeDeltaUsd: pendingTrade.sizeNum,
-      acceptablePrice,
-      account: address,
-    });
-
-    sendTransaction({
-      to: GMX_CONTRACTS.ExchangeRouter,
-      data: calldata,
-      value,
-    });
-  }, [pendingTrade, address, sendTransaction]);
+  }, [pendingTrade, address, needsApproval, sendTransaction, submitOrder]);
 
   // Watch for transaction success and move to next step
   useEffect(() => {
