@@ -53,11 +53,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Send notification via Neynar
+    console.log('[Notifications] Sending to Neynar:', { fid, title, body });
+
     const response = await fetch(NEYNAR_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'api_key': apiKey,
+        'x-api-key': apiKey,
       },
       body: JSON.stringify({
         target_fids: [fid],

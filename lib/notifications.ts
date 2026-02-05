@@ -16,6 +16,8 @@ export async function sendNotification(
   fid: number,
   data?: NotificationData
 ): Promise<boolean> {
+  console.log('[Notifications] sendNotification called:', { type, fid, data });
+
   try {
     const response = await fetch('/api/notifications', {
       method: 'POST',
@@ -25,13 +27,20 @@ export async function sendNotification(
       body: JSON.stringify({ type, fid, data }),
     });
 
+    const responseText = await response.text();
+    console.log('[Notifications] API response:', response.status, responseText);
+
     if (!response.ok) {
-      console.error('[Notifications] Failed to send:', response.status);
+      console.error('[Notifications] Failed to send:', response.status, responseText);
       return false;
     }
 
-    const result = await response.json();
-    return result.success === true;
+    try {
+      const result = JSON.parse(responseText);
+      return result.success === true;
+    } catch {
+      return false;
+    }
   } catch (error) {
     console.error('[Notifications] Error sending notification:', error);
     return false;
