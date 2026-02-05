@@ -128,4 +128,4 @@ MIT
 
 ---
 
-Built by [Fixr](https://fixr.nexus) | GMX V2 on Arbitrum | Farcaster Frames
+Built by [Fixr](https://fixr.nexus) 🔧(https://fixr.nexus) | GMX V2 on Arbitrum | Farcaster Frames
