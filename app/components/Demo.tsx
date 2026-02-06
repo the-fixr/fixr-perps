@@ -882,16 +882,6 @@ export default function Demo() {
             }
           } else {
             console.log('[Frame] App already added by user, skipping addMiniApp');
-            // If already added, try sending notification anyway for testing
-            const fid = context?.user?.fid;
-            if (fid) {
-              console.log('[Frame] Sending welcome notification to existing user, FID:', fid);
-              sendWelcomeNotification(fid).then(success => {
-                console.log('[Frame] Existing user notification result:', success);
-              }).catch(err => {
-                console.error('[Frame] Existing user notification error:', err);
-              });
-            }
           }
         }
       } catch (err) {
